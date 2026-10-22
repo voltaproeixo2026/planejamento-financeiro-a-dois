@@ -160,7 +160,7 @@ function Bills({ month }: { month: string }) {
   );
 }
 
-function Debts() {
+export function Debts() {
   const { s, update } = useAppState();
   const [f, setF] = useState({ name: "", total: "", installments: "", amount: "", paidCount: "0", firstDue: new Date().toISOString().slice(0, 10), person: "" });
   const add = (e: React.FormEvent) => {

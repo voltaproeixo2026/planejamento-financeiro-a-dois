@@ -1,21 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Home, Wallet, Scale, ArrowLeftRight, LineChart, LogOut, RotateCcw, Copy } from "lucide-react";
+import { ChartPie, List, CreditCard, Percent, CalendarDays, Target, LogOut, Copy } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { HouseholdProvider, useHousehold } from "@/lib/household";
-import { emptyState, exampleState, ym } from "@/lib/finance";
+import { exampleState, monthLabel, ym } from "@/lib/finance";
 import { MonthNav } from "@/components/app/ui-bits";
 import { Dashboard } from "@/components/app/Dashboard";
-import { Accounts } from "@/components/app/Accounts";
+import { Accounts, Debts } from "@/components/app/Accounts";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { Split } from "@/components/app/Split";
 import { Cashflow } from "@/components/app/Cashflow";
 import { Planning } from "@/components/app/Planning";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
@@ -24,17 +24,20 @@ export const Route = createFileRoute("/_authenticated/app")({
       { name: "description", content: "Painel financeiro do casal." },
       { property: "og:title", content: "Painel — Contas do Casal" },
       { property: "og:description", content: "Painel financeiro do casal." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: () => <HouseholdProvider><AppShell /></HouseholdProvider>,
 });
 
 const tabs = [
-  { id: "inicio", label: "Início", icon: Home },
-  { id: "contas", label: "Contas", icon: Wallet },
-  { id: "divisao", label: "Divisão", icon: Scale },
-  { id: "fluxo", label: "Fluxo", icon: ArrowLeftRight },
-  { id: "plano", label: "Planejamento", icon: LineChart },
+  { id: "inicio", label: "Resumo", icon: ChartPie },
+  { id: "contas", label: "Contas", icon: List },
+  { id: "dividas", label: "Dívidas", icon: CreditCard },
+  { id: "divisao", label: "Divisão", icon: Percent },
+  { id: "fluxo", label: "Mês", icon: CalendarDays },
+  { id: "plano", label: "Metas", icon: Target },
 ] as const;
 
 function AppShell() {
@@ -51,55 +54,56 @@ function AppShell() {
   const s = h.state;
 
   return (
-    <div className="min-h-screen pb-24 md:pb-8">
-      <header className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <span className="font-display text-xl">Contas do Casal</span>
-          <nav className="hidden gap-1 md:flex">{tabs.map((t) => (
-            <Button key={t.id} variant={tab === t.id ? "default" : "ghost"} size="sm" onClick={() => setTab(t.id)}><t.icon className="h-4 w-4" />{t.label}</Button>
-          ))}</nav>
-          <div className="flex items-center gap-1">
-            <MonthNav month={month} setMonth={setMonth} />
-            <Button variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
+    <div className="household-shell">
+      <div className="household-frame">
+      <header className="household-top">
+        <div className="min-w-0">
+          <p className="shell-eyebrow">{monthLabel(month)}</p>
+          <h1>Contas do Casal</h1>
+        </div>
+        <div className="household-top-actions">
+          {h.members >= 2 && <span className="shell-sync"><span />Sincronizado</span>}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <AlertDialog>
+              <AlertDialogTrigger asChild><Button variant="outline" className="shell-ghost">Recomeçar</Button></AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader><AlertDialogTitle>Voltar aos valores de exemplo?</AlertDialogTitle>
+                  <AlertDialogDescription>Isso apaga o que vocês dois digitaram, nos dois celulares. Isso não pode ser desfeito.</AlertDialogDescription></AlertDialogHeader>
+                <AlertDialogFooter><AlertDialogCancel>Manter</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => { h.replace(exampleState()); toast.success("Exemplos restaurados."); }}>Voltar</AlertDialogAction></AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+      <main className="space-y-4">
         {s.isExample && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning bg-warning/15 p-4 text-sm">
-            <span><b>Dados de exemplo.</b> Os valores mostrados são fictícios — substitua pelos de vocês.</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => h.update((st) => ({ ...st, isExample: false }))}>Manter e editar</Button>
-              <Button size="sm" onClick={() => { h.replace(emptyState(s.names)); toast.success("Pronto! Comece cadastrando suas rendas em Contas."); setTab("contas"); }}>Começar do zero</Button>
-            </div>
+          <div className="shell-notice">
+            <p>Os valores desta página são exemplos. Comece pela aba Contas e troque pelos números de vocês.</p>
+            <Button variant="link" onClick={() => h.update((st) => ({ ...st, isExample: false }))}>Entendi</Button>
           </div>
         )}
+        <div className="shell-month"><MonthNav month={month} setMonth={setMonth} /></div>
         {tab === "inicio" && <Dashboard month={month} />}
         {tab === "contas" && <Accounts month={month} />}
+        {tab === "dividas" && <Debts />}
         {tab === "divisao" && <Split month={month} />}
         {tab === "fluxo" && <Cashflow month={month} />}
         {tab === "plano" && <Planning month={month} />}
 
         <footer className="flex flex-wrap items-center justify-between gap-3 pt-6 text-sm text-muted-foreground">
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             {h.members < 2 ? <>Convide {s.names[1]}: código <b className="text-foreground">{h.inviteCode}</b></> : <>Sincronizado entre {s.names[0]} e {s.names[1]}</>}
             {h.members < 2 && <Button size="icon" variant="ghost" aria-label="Copiar código" onClick={() => { navigator.clipboard.writeText(h.inviteCode ?? ""); toast.success("Código copiado."); }}><Copy className="h-4 w-4" /></Button>}
           </span>
-          <AlertDialog>
-            <AlertDialogTrigger asChild><Button variant="outline" size="sm"><RotateCcw className="h-4 w-4" />Restaurar exemplos</Button></AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader><AlertDialogTitle>Apagar os dados do casal?</AlertDialogTitle>
-                <AlertDialogDescription>Todos os dados inseridos por {s.names[0]} e {s.names[1]} serão apagados e substituídos pelos valores de exemplo. Isso não pode ser desfeito.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { h.replace(exampleState()); toast.success("Exemplos restaurados."); }}>Sim, apagar</AlertDialogAction></AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            <Button variant="ghost" size="icon" aria-label="Sair" onClick={signOut}><LogOut className="h-4 w-4" /></Button>
         </footer>
       </main>
-
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t bg-card md:hidden">{tabs.map((t) => (
-        <button key={t.id} onClick={() => setTab(t.id)} className={cn("flex flex-col items-center gap-1 py-2 text-[11px]", tab === t.id ? "text-primary" : "text-muted-foreground")}><t.icon className="h-5 w-5" />{t.label}</button>
+      </div>
+      <nav className="household-tabbar" aria-label="Seções">{tabs.map((t) => (
+        <Button variant="ghost" key={t.id} onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}><t.icon />{t.label}</Button>
       ))}</nav>
     </div>
   );
@@ -113,6 +117,7 @@ function Onboarding({ onSignOut }: { onSignOut: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6 rounded-2xl border bg-card p-8 shadow-soft">
+        <div className="flex justify-end"><ThemeToggle /></div>
         <h1 className="text-3xl">Bem-vindos!</h1>
         <div className="space-y-2"><p className="text-sm text-muted-foreground">Primeira pessoa do casal? Crie o espaço de vocês.</p>
           <Button className="w-full" disabled={busy} onClick={() => run(h.create)}>Criar espaço do casal</Button></div>
