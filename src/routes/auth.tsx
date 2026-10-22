@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -13,6 +14,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Entre para acessar as finanças do casal." },
       { property: "og:title", content: "Entrar — Contas do Casal" },
       { property: "og:description", content: "Entre para acessar as finanças do casal." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AuthPage,
@@ -46,6 +49,7 @@ function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl border bg-card p-8 shadow-soft">
+        <div className="flex justify-end"><ThemeToggle /></div>
         <h1 className="text-3xl">Contas do Casal</h1>
         <p className="text-sm text-muted-foreground">{mode === "in" ? "Entre na sua conta" : "Crie sua conta — cada um usa a sua"}</p>
         <div className="space-y-2"><Label htmlFor="em">E-mail</Label><Input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>

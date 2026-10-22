@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Heart, Wallet, CalendarClock, TrendingUp } from "lucide-react";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -9,6 +10,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Divida despesas, acompanhe dívidas, a conta conjunta e planeje os próximos meses juntos." },
       { property: "og:title", content: "Contas do Casal" },
       { property: "og:description", content: "Planejamento financeiro a dois, sincronizado entre os celulares." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Index,
@@ -22,6 +25,7 @@ function Index() {
   ];
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
+      <div className="mb-4 flex justify-end"><ThemeToggle /></div>
       <Heart className="mb-6 h-10 w-10 text-person-a" />
       <h1 className="text-5xl leading-tight md:text-6xl">Contas do Casal</h1>
       <p className="mt-4 max-w-xl text-lg text-muted-foreground">Organizem a vida financeira a dois com clareza e tranquilidade — cada um no seu celular, os mesmos dados.</p>
