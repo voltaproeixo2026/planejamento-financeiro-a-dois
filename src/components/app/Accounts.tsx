@@ -51,8 +51,8 @@ function Incomes({ month }: { month: string }) {
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = toCents(f.amount), day = Number(f.day);
-    if (!f.desc.trim() || amount <= 0) return toast.error("Informe descrição e valor maior que zero.");
-    if (f.freq !== "weekly" && (day < 1 || day > 31)) return toast.error("Dia deve estar entre 1 e 31.");
+    if (!f.desc.trim() || amount <= 0) { toast.error("Informe descrição e valor maior que zero."); return; }
+    if (f.freq !== "weekly" && (day < 1 || day > 31)) { toast.error("Dia deve estar entre 1 e 31."); return; }
     update((st) => ({ ...st, incomes: [...st.incomes, { id: uid(), desc: f.desc.trim(), person: Number(f.person) as Person, amount, freq: f.freq, day, active: true, autonomous: f.autonomous }] }));
     setF({ ...f, desc: "", amount: "" }); toast.success("Renda adicionada.");
   };
@@ -96,7 +96,7 @@ function Extras({ month }: { month: string }) {
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = toCents(f.amount);
-    if (!f.desc.trim() || amount <= 0 || !f.date) return toast.error("Preencha descrição, valor e data.");
+    if (!f.desc.trim() || amount <= 0 || !f.date) { toast.error("Preencha descrição, valor e data."); return; }
     update((st) => ({ ...st, extras: [...st.extras, { id: uid(), desc: f.desc.trim(), amount, person: Number(f.person) as Person, date: f.date, month: f.date.slice(0, 7) }] }));
     setF({ ...f, desc: "", amount: "" }); toast.success("Extra registrado.");
   };
@@ -125,10 +125,10 @@ function Bills({ month }: { month: string }) {
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = toCents(f.amount), day = Number(f.day);
-    if (!f.name.trim() || amount <= 0) return toast.error("Informe nome e valor maior que zero.");
-    if (day < 1 || day > 31) return toast.error("Dia deve estar entre 1 e 31.");
-    if (f.end && f.end < f.start) return toast.error("O fim não pode ser antes do início.");
-    if (s.bills.some((b) => b.name.toLowerCase() === f.name.trim().toLowerCase() && b.day === day)) return toast.error("Já existe uma conta com esse nome e dia.");
+    if (!f.name.trim() || amount <= 0) { toast.error("Informe nome e valor maior que zero."); return; }
+    if (day < 1 || day > 31) { toast.error("Dia deve estar entre 1 e 31."); return; }
+    if (f.end && f.end < f.start) { toast.error("O fim não pode ser antes do início."); return; }
+    if (s.bills.some((b) => b.name.toLowerCase() === f.name.trim().toLowerCase() && b.day === day)) { toast.error("Já existe uma conta com esse nome e dia."); return; }
     update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: f.start, end: f.end || undefined, paid: {} }] }));
     setF({ ...f, name: "", amount: "" }); toast.success("Conta adicionada.");
   };
@@ -166,8 +166,8 @@ function Debts() {
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const n = Number(f.installments), amount = toCents(f.amount), paid = Number(f.paidCount);
-    if (!f.name.trim() || n < 1 || amount <= 0) return toast.error("Informe nome, parcelas e valor da parcela.");
-    if (paid < 0 || paid > n) return toast.error("Parcelas pagas inválidas.");
+    if (!f.name.trim() || n < 1 || amount <= 0) { toast.error("Informe nome, parcelas e valor da parcela."); return; }
+    if (paid < 0 || paid > n) { toast.error("Parcelas pagas inválidas."); return; }
     update((st) => ({ ...st, debts: [...st.debts, { id: uid(), name: f.name.trim(), total: toCents(f.total) || amount * n, installments: n, amount, paidCount: paid, firstDue: f.firstDue, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "" }] }));
     setF({ ...f, name: "", total: "", installments: "", amount: "" }); toast.success("Dívida adicionada.");
   };
@@ -202,7 +202,7 @@ function Debts() {
               <Button size="sm" onClick={() => update((st) => ({ ...st, debts: st.debts.map((x) => x.id === d.id ? { ...x, paidCount: x.paidCount + 1 } : x) }))}>Pagar próxima parcela</Button>
               <Button size="sm" variant="outline" onClick={() => {
                 const v = prompt("Novo valor da próxima parcela (R$) — ex.: juros ou antecipação");
-                if (v === null) return; const c = toCents(v); if (c < 0) return toast.error("Valor inválido.");
+                if (v === null) return; const c = toCents(v); if (c < 0) { toast.error("Valor inválido."); return; }
                 update((st) => ({ ...st, debts: st.debts.map((x) => x.id === d.id ? { ...x, overrides: { ...x.overrides, [x.paidCount]: c } } : x) }));
               }}>Ajustar próxima</Button>
             </div>}

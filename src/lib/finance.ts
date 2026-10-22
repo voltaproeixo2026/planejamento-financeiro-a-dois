@@ -16,13 +16,13 @@ export interface Income {
 export interface Extra { id: string; desc: string; amount: number; person: Person; date: string; month: string }
 export interface Bill {
   id: string; name: string; category: string; amount: number; day: number;
-  person: Person | null; shared: boolean; start: string; end?: string;
+  person: Person | null; shared: boolean; start: string; end?: string | undefined;
   paid: Record<string, boolean>; // month -> paid
 }
 export interface Debt {
   id: string; name: string; total: number; installments: number; amount: number;
   paidCount: number; firstDue: string; person: Person | null; shared: boolean;
-  overrides?: Record<number, number>; // installment index -> custom amount
+  overrides?: Record<number, number> | undefined; // installment index -> custom amount
 }
 export interface Transfer { id: string; person: Person; amount: number; date: string; month: string }
 
@@ -48,31 +48,35 @@ export const fmtDate = (iso: string) => {
   const [y, m, d] = iso.split("-");
   return d ? `${d}/${m}/${y}` : `${m}/${y}`;
 };
-export const monthLabel = (m: string) => {
+const parseMonth = (m: string): [number, number] => {
   const [y, mo] = m.split("-").map(Number);
+  return [y ?? 0, mo ?? 1];
+};
+export const monthLabel = (m: string) => {
+  const [y, mo] = parseMonth(m);
   return new Date(y, mo - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 };
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 export const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 export const addMonths = (m: string, n: number) => {
-  const [y, mo] = m.split("-").map(Number);
+  const [y, mo] = parseMonth(m);
   return ym(new Date(y, mo - 1 + n, 1));
 };
 export const monthsBetween = (a: string, b: string) => {
-  const [ya, ma] = a.split("-").map(Number);
-  const [yb, mb] = b.split("-").map(Number);
+  const [ya, ma] = parseMonth(a);
+  const [yb, mb] = parseMonth(b);
   return (yb - ya) * 12 + (mb - ma);
 };
 export const daysIn = (m: string) => {
-  const [y, mo] = m.split("-").map(Number);
+  const [y, mo] = parseMonth(m);
   return new Date(y, mo, 0).getDate();
 };
 const iso = (m: string, day: number) => `${m}-${String(Math.min(day, daysIn(m))).padStart(2, "0")}`;
 
 /** Dates in the month on which a given weekday occurs (not assuming 4 per month). */
 export function weekdayDates(m: string, weekday: number): string[] {
-  const [y, mo] = m.split("-").map(Number);
+  const [y, mo] = parseMonth(m);
   const out: string[] = [];
   for (let d = 1; d <= daysIn(m); d++) if (new Date(y, mo - 1, d).getDay() === weekday) out.push(iso(m, d));
   return out;
@@ -138,7 +142,7 @@ export interface MonthSummary {
   transferred: [number, number]; needTransfer: [number, number];
 }
 
-export function summarize(s: AppState, m: string, opts: { factor?: number; today?: string } = {}): MonthSummary {
+export function summarize(s: AppState, m: string, opts: { factor?: number | undefined; today?: string | undefined } = {}): MonthSummary {
   const factor = opts.factor ?? 1;
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   const recurring: [number, number] = [0, 0];
