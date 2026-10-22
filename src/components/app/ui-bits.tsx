@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { addMonths, BRL, monthLabel } from "@/lib/finance";
 import { cn } from "@/lib/utils";
 
-export function Stat({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: "good" | "bad" | "warn" }) {
+export function Stat({ label, value, hint, tone }: { label: string; value: number; hint?: string | undefined; tone?: "good" | "bad" | "warn" | undefined }) {
   return (
     <div className="rounded-2xl border bg-card p-5 shadow-soft">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>

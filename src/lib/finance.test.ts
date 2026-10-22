@@ -31,7 +31,7 @@ describe("finance rules", () => {
     s.debts.push({ id: "d", name: "TV", total: 30000, installments: 3, amount: 10000, paidCount: 0, firstDue: "2026-01-05", person: null, shared: true });
     expect(summarize(s, "2026-02").debtInstallments).toBe(10000);
     expect(summarize(s, "2026-04").debtInstallments).toBe(0);
-    expect(debtSummary(s.debts[0]).remaining).toBe(30000);
+    expect(debtSummary(s.debts[0]!).remaining).toBe(30000);
   });
   it("transfer plan does not double count transfers already made", () => {
     const s = base();

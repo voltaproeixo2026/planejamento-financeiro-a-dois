@@ -19,7 +19,7 @@ export function Split({ month }: { month: string }) {
   const [manual, setManual] = useState({ person: "0", amount: "", date: today });
 
   const record = (person: Person, amount: number, date: string) => {
-    if (amount <= 0) return toast.error("Valor deve ser maior que zero.");
+    if (amount <= 0) { toast.error("Valor deve ser maior que zero."); return; }
     update((st) => ({ ...st, transfers: [...st.transfers, { id: uid(), person, amount, date, month: date.slice(0, 7) }] }));
     toast.success("Transferência registrada.");
   };
@@ -29,7 +29,7 @@ export function Split({ month }: { month: string }) {
       <Section title="Divisão das contas compartilhadas" desc="Contas individuais não entram aqui. A soma é sempre 100%.">
         <div className="mb-4 flex items-center gap-4">
           <span className="w-24 text-sm font-medium text-person-a">{s.names[0]} {s.split[0]}%</span>
-          <Slider value={[s.split[0]]} min={0} max={100} step={1} onValueChange={([v]) => update((st) => ({ ...st, split: [v, 100 - v] }))} />
+          <Slider value={[s.split[0]]} min={0} max={100} step={1} onValueChange={([v]) => { const val = v ?? 50; update((st) => ({ ...st, split: [val, 100 - val] })); }} />
           <span className="w-24 text-right text-sm font-medium text-person-b">{s.split[1]}% {s.names[1]}</span>
         </div>
         <div className="flex flex-wrap gap-2">

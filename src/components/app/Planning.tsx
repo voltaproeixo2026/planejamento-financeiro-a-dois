@@ -36,7 +36,7 @@ export function Planning({ month }: { month: string }) {
       <Section title="E se a renda autônoma vier menor?" desc="Cenário hipotético — não altera seus dados. Extras não entram na simulação."
         action={<Button size="sm" variant="outline" onClick={() => setFactor(100)}>Restaurar original</Button>}>
         {hasAuto ? <>
-          <div className="mb-5 flex items-center gap-4"><span className="w-16 text-sm font-semibold">{factor}%</span><Slider value={[factor]} min={0} max={150} step={5} onValueChange={([v]) => setFactor(v)} /></div>
+          <div className="mb-5 flex items-center gap-4"><span className="w-16 text-sm font-semibold">{factor}%</span><Slider value={[factor]} min={0} max={150} step={5} onValueChange={([v]) => setFactor(v ?? 100)} /></div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat label="Receitas (simulado)" value={sim.totalIncome} hint={`Real: ${BRL(base.recurring[0] + base.recurring[1])}`} />
             <Stat label="Despesas" value={sim.paid + sim.pending + sim.freeMoney[0] + sim.freeMoney[1]} />
