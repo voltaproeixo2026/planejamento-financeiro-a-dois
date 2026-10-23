@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAppState } from "@/lib/household";
 import { BRL, debtSummary, fmtDate, incomeReceipts, itemsForMonth, toCents, uid, type Freq, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
@@ -24,23 +23,16 @@ export function Accounts({ month }: { month: string }) {
   const { s, update } = useAppState();
   return (
     <div className="space-y-6">
-      <Section title="O casal" desc="Os nomes aparecem em todo o app.">
+      <Section title="Quem somos" desc="Os nomes aparecem em todo o app.">
         <div className="grid gap-3 sm:grid-cols-2">
           {([0, 1] as Person[]).map((p) => (
             <F key={p} label={`Pessoa ${p + 1}`}><Input value={s.names[p]} onChange={(e) => update((st) => { const n = [...st.names] as [string, string]; n[p] = e.target.value; return { ...st, names: n }; })} /></F>
           ))}
         </div>
       </Section>
-      <Tabs defaultValue="rendas">
-        <TabsList className="flex h-auto flex-wrap">
-          <TabsTrigger value="rendas">Rendas</TabsTrigger><TabsTrigger value="extras">Extras</TabsTrigger>
-          <TabsTrigger value="fixas">Contas fixas</TabsTrigger><TabsTrigger value="dividas">Dívidas</TabsTrigger>
-        </TabsList>
-        <TabsContent value="rendas"><Incomes month={month} /></TabsContent>
-        <TabsContent value="extras"><Extras month={month} /></TabsContent>
-        <TabsContent value="fixas"><Bills month={month} /></TabsContent>
-        <TabsContent value="dividas"><Debts /></TabsContent>
-      </Tabs>
+      <Incomes month={month} />
+      <Extras month={month} />
+      <Bills month={month} />
     </div>
   );
 }
@@ -57,7 +49,7 @@ function Incomes({ month }: { month: string }) {
     setF({ ...f, desc: "", amount: "" }); toast.success("Renda adicionada.");
   };
   return (
-    <Section title="Renda recorrente" desc="Mensal conta 1×; quinzenal 2× (dia e dia+15); semanal conta quantas vezes o dia da semana cai no mês.">
+    <Section title="Rendas que se repetem" desc="Mensal conta 1×; quinzenal 2× (dia e dia+15); semanal conta quantas vezes o dia da semana cai no mês.">
       <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <F label="Descrição"><Input value={f.desc} onChange={(e) => setF({ ...f, desc: e.target.value })} placeholder="Salário" /></F>
         <F label="Pessoa"><PersonSelect value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
@@ -146,10 +138,11 @@ function Bills({ month }: { month: string }) {
         <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
       </form>
       {items.length ? <ul className="divide-y">{items.map((i) => {
-        const b = s.bills.find((x) => x.id === i.refId)!;
+        const b = s.bills.find((x) => x.id === i.refId);
+        if (!b) return null;
         return (
           <li key={i.key} className="flex flex-wrap items-center justify-between gap-2 py-3">
-            <div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{b.category || "Sem categoria"} · vence {fmtDate(i.date)} · {i.shared ? "Compartilhada" : `Individual de ${s.names[i.person!]}`}</p></div>
+            <div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{b.category || "Sem categoria"} · vence {fmtDate(i.date)} · {i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}</p></div>
             <div className="flex items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} />
               <Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month)}>{i.paid ? "Desfazer" : "Marcar paga"}</Button>
               <Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => ({ ...st, bills: st.bills.filter((x) => x.id !== b.id) }))}><Trash2 className="h-4 w-4" /></Button></div>
@@ -172,7 +165,7 @@ export function Debts() {
     setF({ ...f, name: "", total: "", installments: "", amount: "" }); toast.success("Dívida adicionada.");
   };
   return (
-    <Section title="Dívidas e parcelamentos" desc="Marque cada parcela como paga — nada é pago automaticamente na virada do mês.">
+    <Section id="debts" title="Dívidas e parcelamentos" desc="Marque cada parcela como paga — nada é pago automaticamente na virada do mês.">
       <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <F label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></F>
         <F label="Total contratado"><Input type="number" min="0" step="0.01" value={f.total} onChange={(e) => setF({ ...f, total: e.target.value })} placeholder="opcional" /></F>
@@ -189,7 +182,7 @@ export function Debts() {
         return (
           <div key={d.id} className="rounded-xl border p-4">
             <div className="flex items-start justify-between"><div><p className="font-semibold">{d.name} {sm.done && <span className="ml-1 rounded bg-success px-1.5 py-0.5 text-xs text-success-foreground">quitada</span>}</p>
-              <p className="text-xs text-muted-foreground">{d.shared ? "Compartilhada" : s.names[d.person!]} · vence dia {d.firstDue.slice(8)} · desde {fmtDate(d.firstDue)}</p></div>
+              <p className="text-xs text-muted-foreground">{d.shared ? "Compartilhada" : s.names[d.person ?? 0]} · vence dia {d.firstDue.slice(8)} · desde {fmtDate(d.firstDue)}</p></div>
               <Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => ({ ...st, debts: st.debts.filter((x) => x.id !== d.id) }))}><Trash2 className="h-4 w-4" /></Button></div>
             <div className="my-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary" style={{ width: `${pct}%` }} /></div>
             <dl className="grid grid-cols-2 gap-1 text-sm">
