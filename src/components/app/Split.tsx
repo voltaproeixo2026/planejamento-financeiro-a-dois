@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { useAppState } from "@/lib/household";
 import { BRL, fmtDate, summarize, toCents, transferPlan, uid, weekdayDates, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Stat } from "./ui-bits";
+import { personView } from "@/lib/planning-model";
 
 const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
@@ -26,7 +27,7 @@ export function Split({ month }: { month: string }) {
 
   return (
     <div className="space-y-6">
-      <Section title="Divisão das contas compartilhadas" desc="Contas individuais não entram aqui. A soma é sempre 100%.">
+      <Section title="Como dividir as contas" desc="Contas individuais não entram aqui. A soma é sempre 100%.">
         <div className="mb-4 flex items-center gap-4">
           <span className="w-24 text-sm font-medium text-person-a">{s.names[0]} {s.split[0]}%</span>
           <Slider value={[s.split[0]]} min={0} max={100} step={1} onValueChange={([v]) => { const val = v ?? 50; update((st) => ({ ...st, split: [val, 100 - val] })); }} />
@@ -39,12 +40,17 @@ export function Split({ month }: { month: string }) {
             update((st) => ({ ...st, split: [p, 100 - p] }));
           }}>Proporcional à renda</Button>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <Stat label="Compartilhadas no mês" value={sum.sharedTotal} />
-          <Stat label={`Parte de ${s.names[0]}`} value={sum.share[0]} hint={`+ individuais ${BRL(sum.individual[0])}`} />
-          <Stat label={`Parte de ${s.names[1]}`} value={sum.share[1]} hint={`+ individuais ${BRL(sum.individual[1])}`} />
-        </div>
+        <p className="mt-4 text-sm">Compartilhadas no mês: <b>{BRL(sum.sharedTotal)}</b></p>
       </Section>
+
+      <div className="grid gap-4 md:grid-cols-2">{([0, 1] as Person[]).map(p => {
+        const person = personView(s, month, p);
+        return <Section key={p} id={p === 0 ? 'person-a' : 'person-b'} title={s.names[p]}>
+          <p className="text-2xl font-semibold">{BRL(person.share[p])}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{s.split[p]}% das contas compartilhadas</p>
+          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm"><dt>Renda no mês</dt><dd className="text-right">{BRL(person.income[p])}</dd><dt>Contas individuais</dt><dd className="text-right">{BRL(person.individual[p])}</dd><dt>Dinheiro livre no mês</dt><dd className="text-right">{BRL(person.freeMoney[p])}</dd><dt>Sobra para poupar</dt><dd className="text-right">{BRL(person.available)}</dd></dl>
+        </Section>;
+      })}</div>
 
       <Section title="Dinheiro livre por semana" desc={`Fica na conta de cada um, fora da conjunta. Neste mês há ${weeks} ${weekdays[s.freeWeekday]}s — o cálculo usa o calendário real.`}>
         <div className="grid gap-3 sm:grid-cols-3">

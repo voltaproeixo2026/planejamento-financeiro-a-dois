@@ -15,9 +15,9 @@ export function Stat({ label, value, hint, tone }: { label: string; value: numbe
   );
 }
 
-export function Section({ title, desc, children, action }: { title: string; desc?: string; children: ReactNode; action?: ReactNode }) {
+export function Section({ id, title, desc, children, action }: { id?: string; title: string; desc?: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-card p-5 shadow-soft md:p-6">
+    <section id={id} className="rounded-2xl border bg-card p-5 shadow-soft md:p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div><h2 className="text-xl">{title}</h2>{desc && <p className="text-sm text-muted-foreground">{desc}</p>}</div>
         {action}

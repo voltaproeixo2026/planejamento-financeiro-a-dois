@@ -11,7 +11,8 @@ import { HouseholdProvider, useHousehold } from "@/lib/household";
 import { exampleState, monthLabel, ym } from "@/lib/finance";
 import { MonthNav } from "@/components/app/ui-bits";
 import { Dashboard } from "@/components/app/Dashboard";
-import { Accounts, Debts } from "@/components/app/Accounts";
+import { Accounts } from "@/components/app/Accounts";
+import { DebtScreen } from "@/components/app/DebtScreen";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { Split } from "@/components/app/Split";
 import { Cashflow } from "@/components/app/Cashflow";
@@ -86,9 +87,9 @@ function AppShell() {
           </div>
         )}
         <div className="shell-month"><MonthNav month={month} setMonth={setMonth} /></div>
-        {tab === "inicio" && <Dashboard month={month} />}
+        {tab === "inicio" && <Dashboard month={month} onDebts={() => setTab('dividas')} />}
         {tab === "contas" && <Accounts month={month} />}
-        {tab === "dividas" && <Debts />}
+        {tab === "dividas" && <DebtScreen month={month} />}
         {tab === "divisao" && <Split month={month} />}
         {tab === "fluxo" && <Cashflow month={month} />}
         {tab === "plano" && <Planning month={month} />}
