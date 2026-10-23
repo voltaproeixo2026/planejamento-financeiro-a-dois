@@ -11,4 +11,5 @@
 
 - Keep the reference shell styling scoped to `.household-shell`; leaf screen layouts remain independent so visual migration can proceed one screen at a time.
 - Theme switching sets `data-theme` on the document only and defaults to system preference; it never uses financial persistence or browser storage.
-- The shell reuses the existing exported debt view for its dedicated navigation entry; finance calculations and Supabase persistence remain in their existing modules.
+- The dedicated debt screen wraps the existing debt editor and owns multi-month forecasts; the summary owns the income scenario, and goals never render either, to avoid duplicated screen responsibilities.
+- Additive presentation models live in `src/lib/planning-model.ts` and delegate to existing finance functions; keep existing financial formulas and persistence unchanged, and store optional goal entries in the existing household JSON for backward compatibility without schema changes.
