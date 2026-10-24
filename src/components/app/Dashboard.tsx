@@ -1,4 +1,4 @@
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
@@ -44,7 +44,7 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
     </Section>
     <IncomeScenario month={month} />
     <Section title="Para onde vai a renda">
-      {allocation.length ? <><div id="bar" role="img" aria-label="Divisão da renda mensal por categoria" className="h-12"><ResponsiveContainer><BarChart layout="vertical" data={[Object.fromEntries(allocation.map(g => [g.name, g.value]))]}><XAxis type="number" hide /><Tooltip formatter={(v: number) => BRL(v)} />{allocation.map(g => <Bar key={g.name} dataKey={g.name} stackId="income" fill={g.color} />)}</BarChart></ResponsiveContainer></div><ul id="legend" className="mt-4 grid gap-3 text-sm sm:grid-cols-2">{allocation.map(g => <li key={g.name} className="flex items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: g.color }} />{g.name}<b className="ml-auto">{BRL(g.value)}</b></li>)}</ul></> : <><div id="bar" /><ul id="legend"><li><Empty>Cadastre rendas e contas para ver a distribuição.</Empty></li></ul></>}
+      {allocation.length ? <><div id="bar" role="img" aria-label="Divisão da renda mensal por categoria" className="h-12"><ResponsiveContainer><BarChart layout="vertical" data={[Object.fromEntries(allocation.map(g => [g.name, g.value]))]}><XAxis type="number" hide /><YAxis type="category" hide /><Tooltip formatter={(v: number) => BRL(v)} />{allocation.map(g => <Bar key={g.name} dataKey={g.name} stackId="income" fill={g.color} />)}</BarChart></ResponsiveContainer></div><ul id="legend" className="mt-4 grid gap-3 text-sm sm:grid-cols-2">{allocation.map(g => <li key={g.name} className="flex items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: g.color }} />{g.name}<b className="ml-auto">{BRL(g.value)}</b></li>)}</ul></> : <><div id="bar" /><ul id="legend"><li><Empty>Cadastre rendas e contas para ver a distribuição.</Empty></li></ul></>}
     </Section>
     <Section title="Dívidas">
       <ul id="debt-home" className="divide-y">{s.debts.length ? s.debts.map(d => <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><div><b>{d.name}</b><p className="text-sm text-muted-foreground">{d.shared ? 'Os dois' : s.names[d.person ?? 0]} · {debtSummary(d).left} parcelas restantes</p></div><b>{BRL(debtSummary(d).remaining)}</b></li>) : <li><Empty>Nenhuma dívida cadastrada. Adicione na aba Dívidas.</Empty></li>}</ul>
