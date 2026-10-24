@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { emptyState, type AppState } from '@/lib/finance';
 import * as models from '@/lib/planning-model';
 
@@ -7,6 +7,10 @@ const household = vi.hoisted(() => ({ state: {} as AppState }));
 vi.mock('@/lib/household', () => ({ useAppState: () => ({ s: household.state }) }));
 import { IncomeScenario } from '@/components/app/IncomeScenario';
 
+beforeAll(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+});
+afterAll(() => vi.unstubAllGlobals());
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('Income scenario interaction', () => {
   it('updates the simulated balance immediately when the slider changes without changing household values', () => {
