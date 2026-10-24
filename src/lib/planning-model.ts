@@ -1,4 +1,4 @@
-import { addMonths, debtSummary, itemsForMonth, jointCashflow, summarize, type AppState } from './finance';
+import { addMonths, debtInstallment, debtSummary, itemsForMonth, jointCashflow, summarize, type AppState, type Debt } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -20,17 +20,43 @@ export function debtTotals(s: AppState, month: string) {
 export function allocationView(s: AppState, month: string) {
   const sum = summarize(s, month);
   const groups = [
-    { name: 'Dívidas', value: sum.debtInstallments, color: 'var(--c-divida)' },
-    ...['Moradia', 'Alimentação', 'Pet', 'Outros'].map((name, index) => ({ name, color: ['var(--c-casa)', 'var(--c-alim)', 'var(--c-pet)', 'var(--c-outros)'][index],
+    { name: 'Dívidas', value: sum.debtInstallments, category: 'divida' },
+    ...['Casa', 'Alimentação', 'Pet', 'Outros'].map((name, index) => ({ name, category: ['casa', 'alim', 'pet', 'outros'][index],
       value: sum.items.filter(i => i.kind === 'bill' && (() => {
         const category = s.bills.find(b => b.id === i.refId)?.category.toLowerCase();
-        const group = category === 'moradia' || category === 'casa' ? 'Moradia' : category === 'alimentação' ? 'Alimentação' : category === 'pet' ? 'Pet' : 'Outros';
+        const group = category === 'moradia' || category === 'casa' ? 'Casa' : category === 'alimentação' || category === 'alim' ? 'Alimentação' : category === 'pet' ? 'Pet' : 'Outros';
         return group === name;
       })()).reduce((total, i) => total + i.amount, 0) })),
-    { name: 'Dinheiro livre', value: sum.freeMoney[0] + sum.freeMoney[1], color: 'var(--c-livre)' },
-    { name: 'Sobra prevista', value: Math.max(0, sum.leftover), color: 'var(--c-poup)' },
+    { name: 'Dinheiro livre', value: sum.freeMoney[0] + sum.freeMoney[1], category: 'livre' },
+    { name: 'Poupança', value: Math.max(0, sum.leftover), category: 'poup' },
   ].filter(g => g.value > 0);
-  return groups;
+  const total = groups.reduce((value, group) => value + group.value, 0);
+  return groups.map(group => ({ ...group, percent: Math.round(group.value / total * 100) }));
+}
+
+export const incomeScenarioControl = { min: 30, max: 100, step: 5, initial: 70 };
+export function incomeScenarioView(s: AppState, month: string, percent: number) {
+  // Explicitly omit extras even at 100%; summarize normally includes them at factor=1.
+  return summarize({ ...s, extras: [] }, month, { factor: percent / 100 });
+}
+
+export function debtHomeView(s: AppState, month: string) {
+  return s.debts.map(d => {
+    const installment = debtInstallment(d, month);
+    const balance = debtSummary(d);
+    const status = balance.done || month > addMonths(d.firstDue.slice(0, 7), d.installments - 1) ? 'done' : installment ? 'active' : 'future';
+    return {
+      id: d.id, name: d.name, origin: (d as Debt & { origin?: string }).origin,
+      owner: d.shared ? 'Os dois' : s.names[d.person ?? 0],
+      current: installment ? installment.index + 1 : null,
+      installments: d.installments, left: balance.left, remaining: balance.remaining,
+      total: d.amount * d.installments,
+      firstMonth: d.firstDue.slice(0, 7), lastMonth: addMonths(d.firstDue.slice(0, 7), d.installments - 1), status,
+    };
+  }).sort((a, b) => {
+    const order: Record<string, number> = { active: 0, future: 1, done: 2 };
+    return (order[a.status] ?? 0) - (order[b.status] ?? 0);
+  });
 }
 export function personView(s: AppState, month: string, person: 0 | 1) {
   const sum = summarize(s, month);
