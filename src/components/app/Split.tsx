@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useAppState } from "@/lib/household";
 import { BRL, fmtDate, summarize, toCents, transferPlan, uid, weekdayDates, type Person } from "@/lib/finance";
-import { Empty, NativeSelect, Section, Stat } from "./ui-bits";
+import { Empty, NativeSelect, Section } from "./ui-bits";
 import { personView } from "@/lib/planning-model";
 
 const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
