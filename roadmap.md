@@ -8,6 +8,6 @@
 - [x] Pedido atual: Dívidas — previsão horizontal, avisos por dívida e cadastro editável com referência mensal; 31 testes passaram e aplicativo sem erros de compilação.
 - [x] 3. Dívidas — seção 5 implementada mantendo pagamentos e dados antigos compatíveis; conferência visual autenticada indisponível com Supabase externo.
 - [ ] 4. Mês — refinamento visual detalhado aguarda pedido do usuário.
-- [ ] 5. Divisão — refinamento visual detalhado aguarda pedido do usuário.
+- [ ] 5. Divisão — copiar seção 3: controles segmentados, cartões atualizados imediatamente, barra comprometida, dois campos semanais e transferências por recebimento; preservar fórmulas e persistência.
 - [ ] 6. Contas — refinamento visual detalhado aguarda pedido do usuário.
 - [ ] 7. Metas — refinamento visual detalhado aguarda pedido do usuário.
