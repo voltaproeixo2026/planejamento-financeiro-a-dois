@@ -1,4 +1,4 @@
-import { addMonths, debtInstallment, debtSummary, itemsForMonth, jointCashflow, summarize, type AppState, type Debt } from './finance';
+import { addMonths, BRL, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, type AppState, type Debt } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -46,7 +46,7 @@ export function debtHomeView(s: AppState, month: string) {
     const balance = debtSummary(d);
     const status = balance.done || month > addMonths(d.firstDue.slice(0, 7), d.installments - 1) ? 'done' : installment ? 'active' : 'future';
     return {
-      id: d.id, name: d.name, origin: (d as Debt & { origin?: string }).origin,
+      id: d.id, name: d.name, origin: d.origin,
       owner: d.shared ? 'Os dois' : s.names[d.person ?? 0],
       current: installment ? installment.index + 1 : null,
       installments: d.installments, left: balance.left, remaining: balance.remaining,
@@ -57,6 +57,14 @@ export function debtHomeView(s: AppState, month: string) {
     const order: Record<string, number> = { active: 0, future: 1, done: 2 };
     return (order[a.status] ?? 0) - (order[b.status] ?? 0);
   });
+}
+export function debtSituation(d: Debt, month: string) {
+  const current = debtCur(d, month), balance = debtSummary(d);
+  if (balance.done) return 'Quitada.';
+  if (current < 1) return `Começa em ${monthLabel(d.firstDue.slice(0, 7))}.`;
+  if (current > d.installments) return `Parcelas encerradas. Falta pagar: ${BRL(balance.remaining)}.`;
+  const lastMonth = addMonths(month, d.installments - current);
+  return `Parcela ${current} de ${d.installments} neste mês. ${current === d.installments ? 'É a última parcela.' : `Restam ${balance.left} (com esta): ${BRL(balance.remaining)}. Última em ${monthLabel(lastMonth)}.`}`;
 }
 export function personView(s: AppState, month: string, person: 0 | 1) {
   const sum = summarize(s, month);
