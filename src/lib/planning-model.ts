@@ -1,4 +1,4 @@
-import { addMonths, BRL, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, type AppState, type Debt } from './finance';
+import { addMonths, BRL, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Person } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -69,6 +69,48 @@ export function debtSituation(d: Debt, month: string) {
 export function personView(s: AppState, month: string, person: 0 | 1) {
   const sum = summarize(s, month);
   return { ...sum, available: sum.income[person] - sum.share[person] - sum.individual[person] - sum.freeMoney[person] };
+}
+export type DivisionMethod = 'prop' | 'half' | 'custom';
+type DivisionState = AppState & { splitMethod?: DivisionMethod };
+export const divisionControl = { min: 0, max: 100, step: 1 };
+export function divisionChoice(s: AppState, month: string, method: DivisionMethod, custom = s.split[0]): DivisionState {
+  const sum = summarize(s, month);
+  const percent = method === 'half' ? 50 : method === 'prop'
+    ? sum.totalIncome > 0 ? Math.round(sum.income[0] / sum.totalIncome * 100) : 50
+    : Math.min(100, Math.max(0, custom));
+  return { ...s, splitMethod: method, split: [percent, 100 - percent] };
+}
+export function divisionView(s: AppState, month: string) {
+  const sum = summarize(s, month);
+  const method = (s as DivisionState).splitMethod ?? (s.split[0] === 50 ? 'half' : 'custom');
+  const totalBills = sum.sharedTotal + sum.individual[0] + sum.individual[1];
+  const people = ([0, 1] as Person[]).map(person => {
+    const accounts = sum.share[person] + sum.individual[person];
+    const used = sum.income[person] > 0 ? (accounts + sum.freeMoney[person]) / sum.income[person] * 100 : 0;
+    return { person, name: s.names[person], accounts,
+      percent: Math.round(totalBills > 0 ? accounts / totalBills * 100 : s.split[person]),
+      income: sum.income[person], freeMoney: sum.freeMoney[person],
+      savings: personView(s, month, person).available,
+      usedPercent: Math.round(used), meterPercent: Math.min(100, Math.max(0, Math.round(used))), hot: used > 90,
+      weekly: s.weeklyFree[person] / 100 };
+  });
+  const notes = {
+    prop: 'Cada um paga a mesma fatia da própria renda. Assim o aperto é parecido para os dois e quem ganha mais ajuda mais.',
+    half: 'Cada um paga metade das contas. Funciona bem quando as rendas são parecidas. Aqui, quem ganha menos sente mais.',
+    custom: 'Você escolhe a parte de cada um. Use quando um dos dois já paga algo por fora.',
+  };
+  const individualDebt = sum.items.some(item => item.kind === 'debt' && !item.shared && item.person !== null);
+  const events = transferPlan(s, month, `${month}-01`).map(event => ({
+    ...event, who: event.person, day: Number(event.date.slice(8, 10)),
+    label: event.reason.match(/ao receber "(.*)"\./)?.[1] ?? 'Transferência pendente',
+  }));
+  return { method, customPercent: s.split[0], people, events,
+    note: notes[method] + (individualDebt ? ' As dívidas com um responsável ficam só com ele.' : '') };
+}
+export function divisionWeekly(s: AppState, person: Person, value: number): AppState {
+  const weeklyFree: [number, number] = [...s.weeklyFree];
+  weeklyFree[person] = Math.max(0, value);
+  return { ...s, weeklyFree };
 }
 export function cashflowView(s: AppState, month: string) {
   const cf = jointCashflow(s, month);
