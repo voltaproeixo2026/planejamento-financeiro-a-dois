@@ -1,86 +1,55 @@
-import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { useAppState } from "@/lib/household";
-import { BRL, fmtDate, summarize, toCents, transferPlan, uid, weekdayDates, type Person } from "@/lib/finance";
-import { Empty, NativeSelect, Section } from "./ui-bits";
-import { personView } from "@/lib/planning-model";
-
-const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+import { BRL, toCents } from "@/lib/finance";
+import { divisionChoice, divisionControl, divisionView, divisionWeekly, type DivisionMethod } from "@/lib/planning-model";
 
 export function Split({ month }: { month: string }) {
   const { s, update } = useAppState();
-  const today = new Date().toISOString().slice(0, 10);
-  const sum = summarize(s, month, { today });
-  const plan = transferPlan(s, month, today);
-  const weeks = weekdayDates(month, s.freeWeekday).length;
-  const [manual, setManual] = useState({ person: "0", amount: "", date: today });
-
-  const record = (person: Person, amount: number, date: string) => {
-    if (amount <= 0) { toast.error("Valor deve ser maior que zero."); return; }
-    update((st) => ({ ...st, transfers: [...st.transfers, { id: uid(), person, amount, date, month: date.slice(0, 7) }] }));
-    toast.success("Transferência registrada.");
-  };
+  const view = divisionView(s, month);
+  const methods: { id: DivisionMethod; label: string }[] = [
+    { id: 'prop', label: 'Pela renda' }, { id: 'half', label: 'Meio a meio' }, { id: 'custom', label: 'Escolher' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <Section title="Como dividir as contas" desc="Contas individuais não entram aqui. A soma é sempre 100%.">
-        <div className="mb-4 flex items-center gap-4">
-          <span className="w-24 text-sm font-medium text-person-a">{s.names[0]} {s.split[0]}%</span>
-          <Slider value={[s.split[0]]} min={0} max={100} step={1} onValueChange={([v]) => { const val = v ?? 50; update((st) => ({ ...st, split: [val, 100 - val] })); }} />
-          <span className="w-24 text-right text-sm font-medium text-person-b">{s.split[1]}% {s.names[1]}</span>
+    <div className="division-screen" id="tab-divisao">
+      <section className="card">
+        <h2>Como dividir as contas</h2>
+        <div className="seg" id="method" role="group" aria-label="Forma de dividir">
+          {methods.map(method => <Button key={method.id} variant="ghost" type="button" data-m={method.id}
+            aria-pressed={view.method === method.id} onClick={() => update(st => divisionChoice(st, month, method.id))}>{method.label}</Button>)}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => update((st) => ({ ...st, split: [50, 50] }))}>50/50</Button>
-          <Button size="sm" variant="outline" disabled={sum.recurring[0] + sum.recurring[1] === 0} onClick={() => {
-            const t = sum.recurring[0] + sum.recurring[1]; const p = Math.round((sum.recurring[0] / t) * 100);
-            update((st) => ({ ...st, split: [p, 100 - p] }));
-          }}>Proporcional à renda</Button>
+        <div id="custom-box" hidden={view.method !== 'custom'}>
+          <div className="rangehead"><label htmlFor="custom-pct" id="custom-label">Parte de {s.names[0]}</label><b className="num" id="custom-val">{view.customPercent}%</b></div>
+          <input type="range" id="custom-pct" {...divisionControl} value={view.customPercent}
+            onChange={event => update(st => divisionChoice(st, month, 'custom', Number(event.target.value)))} />
         </div>
-        <p className="mt-4 text-sm">Compartilhadas no mês: <b>{BRL(sum.sharedTotal)}</b></p>
-      </Section>
-
-      <div className="grid gap-4 md:grid-cols-2">{([0, 1] as Person[]).map(p => {
-        const person = personView(s, month, p);
-        return <Section key={p} id={p === 0 ? 'person-a' : 'person-b'} title={s.names[p]}>
-          <p className="text-2xl font-semibold">{BRL(person.share[p])}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{s.split[p]}% das contas compartilhadas</p>
-          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm"><dt>Renda no mês</dt><dd className="text-right">{BRL(person.income[p])}</dd><dt>Contas individuais</dt><dd className="text-right">{BRL(person.individual[p])}</dd><dt>Dinheiro livre no mês</dt><dd className="text-right">{BRL(person.freeMoney[p])}</dd><dt>Sobra para poupar</dt><dd className="text-right">{BRL(person.available)}</dd></dl>
-        </Section>;
-      })}</div>
-
-      <Section title="Dinheiro livre por semana" desc={`Fica na conta de cada um, fora da conjunta. Neste mês há ${weeks} ${weekdays[s.freeWeekday]}s — o cálculo usa o calendário real.`}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {([0, 1] as Person[]).map((p) => (
-            <div key={p} className="space-y-1"><Label className="text-xs">{s.names[p]} (R$/semana)</Label>
-              <Input type="number" min="0" step="0.01" value={s.weeklyFree[p] / 100} onChange={(e) => update((st) => { const w = [...st.weeklyFree] as [number, number]; w[p] = Math.max(0, toCents(e.target.value)); return { ...st, weeklyFree: w }; })} />
-              <p className="text-xs text-muted-foreground">No mês: {BRL(sum.freeMoney[p])}</p></div>
-          ))}
-          <div className="space-y-1"><Label className="text-xs">Semana começa na</Label>
-            <NativeSelect value={s.freeWeekday} onChange={(e) => update((st) => ({ ...st, freeWeekday: Number(e.target.value) }))}>{weekdays.map((w, i) => <option key={w} value={i}>{w}</option>)}</NativeSelect></div>
-        </div>
-      </Section>
-
-      <Section title="Quanto transferir em cada recebimento" desc="A parte de cada um é distribuída pelos recebimentos restantes do mês, descontando o que já foi transferido e o colchão da conta.">
-        <div className="mb-4 grid gap-2 text-sm sm:grid-cols-2">
-          {([0, 1] as Person[]).map((p) => <p key={p}>{s.names[p]}: já transferiu <b>{BRL(sum.transferred[p])}</b> · falta <b>{BRL(sum.needTransfer[p])}</b></p>)}
-        </div>
-        {plan.length ? <ul className="divide-y">{plan.map((p, k) => (
-          <li key={k} className="flex flex-wrap items-center justify-between gap-2 py-3">
-            <div><p className="font-medium">{s.names[p.person]} · {fmtDate(p.date)}</p><p className="text-xs text-muted-foreground">{p.reason}</p></div>
-            <div className="flex items-center gap-2"><b>{BRL(p.amount)}</b><Button size="sm" onClick={() => record(p.person, p.amount, p.date < today ? today : p.date)}>Marcar como feita</Button></div>
-          </li>
-        ))}</ul> : <Empty>Nenhuma transferência pendente neste mês.</Empty>}
-        <form className="mt-5 grid gap-3 border-t pt-4 sm:grid-cols-4" onSubmit={(e) => { e.preventDefault(); record(Number(manual.person) as Person, toCents(manual.amount), manual.date); setManual({ ...manual, amount: "" }); }}>
-          <NativeSelect value={manual.person} onChange={(e) => setManual({ ...manual, person: e.target.value })}><option value="0">{s.names[0]}</option><option value="1">{s.names[1]}</option></NativeSelect>
-          <Input type="number" min="0" step="0.01" placeholder="Valor (R$)" value={manual.amount} onChange={(e) => setManual({ ...manual, amount: e.target.value })} />
-          <Input type="date" value={manual.date} onChange={(e) => setManual({ ...manual, date: e.target.value })} />
-          <Button type="submit" variant="outline">Registrar outra transferência</Button>
-        </form>
-      </Section>
+        <p className="small" id="method-note">{view.note}</p>
+      </section>
+      {view.people.map(person => <section className="card person" id={person.person === 0 ? 'person-a' : 'person-b'} key={person.person}>
+        <header><h2>{person.name}</h2><span className="small">paga {person.percent}% das contas</span></header>
+        <p className="num">{BRL(person.accounts)}<span className="small account-caption"> por mês nas contas</span></p>
+        <div><div className={`meter${person.hot ? ' hot' : ''}`} role="img" aria-label={`Renda comprometida de ${person.name}: ${person.usedPercent}%`}>
+          <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 10" aria-hidden="true"><rect width={person.meterPercent} height="10" /></svg>
+        </div><p className="small meter-caption">Contas e dinheiro livre usam {person.usedPercent}% da renda.</p></div>
+        <dl className="kv"><dt>Renda no mês</dt><dd>{BRL(person.income)}</dd><dt>Dinheiro livre no mês</dt><dd>{BRL(person.freeMoney)}</dd><dt>Sobra para poupar</dt><dd>{BRL(person.savings)}</dd></dl>
+      </section>)}
+      <section className="card">
+        <h2>Dinheiro livre por semana</h2>
+        <p className="small section-caption">Fica na conta de cada um e não entra na divisão das contas.</p>
+        <div className="grid2">{view.people.map(person => <label className="fld" key={person.person}>
+          <span id={person.person === 0 ? 'wk-a-l' : 'wk-b-l'}>{person.name}</span><div className="money">
+            <Input className="in" id={person.person === 0 ? 'wk-a' : 'wk-b'} type="number" inputMode="decimal" min="0" step="5"
+              value={person.weekly} onChange={event => update(st => divisionWeekly(st, person.person, toCents(event.target.value)))} />
+          </div></label>)}</div>
+      </section>
+      <section className="card wide">
+        <h2>Quanto transferir em cada recebimento</h2>
+        <p className="small section-caption">Para a conta conjunta, no dia em que o dinheiro cai.</p>
+        <ul className="plan" id="plan">{view.events.length ? view.events.map((event, index) => <li key={`${event.who}-${event.date}-${index}`}>
+          <span className="d">Dia {event.day}</span><span>{s.names[event.who]}<span className="small receipt-label">{event.label}</span></span><span className="v">{BRL(event.amount)}</span>
+        </li>) : <li className="small">Cadastre as rendas na aba Contas.</li>}</ul>
+      </section>
     </div>
   );
 }
