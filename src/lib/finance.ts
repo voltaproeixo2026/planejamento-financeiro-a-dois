@@ -23,6 +23,9 @@ export interface Debt {
   id: string; name: string; total: number; installments: number; amount: number;
   paidCount: number; firstDue: string; person: Person | null; shared: boolean;
   overrides?: Record<number, number> | undefined; // installment index -> custom amount
+  origin?: string;
+  ref?: number;
+  ref_ym?: string;
 }
 export interface Transfer { id: string; person: Person; amount: number; date: string; month: string }
 
@@ -100,9 +103,32 @@ export interface Item {
 }
 
 export function debtInstallment(d: Debt, m: string) {
-  const k = monthsBetween(d.firstDue.slice(0, 7), m);
+  const k = debtCur(d, m) - 1;
   if (k < 0 || k >= d.installments) return null;
   return { index: k, amount: d.overrides?.[k] ?? d.amount, paid: k < d.paidCount, date: iso(m, Number(d.firstDue.slice(8, 10))) };
+}
+
+/** Optional reference metadata keeps existing debts backwards compatible. */
+export function debtCur(d: Debt, month: string) {
+  if (d.ref !== undefined && d.ref_ym) return d.ref + monthsBetween(d.ref_ym, month);
+  return monthsBetween(d.firstDue.slice(0, 7), month) + 1;
+}
+
+export function editDebt(d: Debt, patch: Partial<Debt>, month: string, current?: number): Debt {
+  const next = { ...d, ...patch };
+  if (current !== undefined) {
+    if (!Number.isInteger(current) || current < 1) return d;
+    next.ref = current;
+    next.ref_ym = month;
+    next.firstDue = `${addMonths(month, 1 - current)}-${d.firstDue.slice(8, 10)}`;
+  }
+  next.total = next.amount * next.installments;
+  return next;
+}
+
+export function newDebt(month: string): Debt {
+  return { id: uid(), name: 'Nova dívida', origin: '', amount: 0, total: 0, installments: 10,
+    paidCount: 0, firstDue: `${month}-10`, person: 0, shared: false, ref: 1, ref_ym: month };
 }
 
 export function itemsForMonth(s: AppState, m: string): Item[] {
@@ -234,6 +260,27 @@ export function projection(s: AppState, from: string, months: number, factor = 1
     }, 0);
     return { month: m, income: sum.totalIncome, expenses: sum.paid + sum.pending + sum.freeMoney[0] + sum.freeMoney[1], leftover: sum.leftover, debtsLeft };
   });
+}
+
+export function forecast(s: AppState, from: string, count: number) {
+  return projection(s, from, count).map((p, k, all) => ({
+    ...p, installments: summarize(s, p.month).debtInstallments,
+    variation: k === 0 ? null : summarize(s, p.month).debtInstallments - summarize(s, all[k - 1]?.month ?? p.month).debtInstallments,
+    debts: s.debts.map(d => ({ id: d.id, current: debtCur(d, p.month), total: d.installments, installment: debtInstallment(d, p.month) })),
+  }));
+}
+
+export function debtChanges(s: AppState, from: string, count: number) {
+  const changes: { id: string; label: 'Termina' | 'Começa'; name: string; month: string; previousMonth: string; amount: number }[] = [];
+  for (let k = 1; k < count; k++) {
+    const month = addMonths(from, k), previousMonth = addMonths(month, -1);
+    for (const d of s.debts) {
+      const previous = debtInstallment(d, previousMonth), current = debtInstallment(d, month);
+      if (previous && !current) changes.push({ id: `${d.id}-${month}`, label: 'Termina', name: d.name, month, previousMonth, amount: previous.amount });
+      else if (!previous && current) changes.push({ id: `${d.id}-${month}`, label: 'Começa', name: d.name, month, previousMonth, amount: current.amount });
+    }
+  }
+  return changes;
 }
 
 export function alerts(s: AppState, m: string, today = new Date().toISOString().slice(0, 10)) {
