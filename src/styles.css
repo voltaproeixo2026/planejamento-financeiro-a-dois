@@ -134,7 +134,7 @@
 /* Division-only reference styling; other screens remain independent. */
 .division-screen { min-width: 0; }
 .division-screen .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; min-width: 0; }
-.division-screen h2 { font-size: 18px; line-height: 1.2; margin: 0 0 12px; }
+.division-screen h2 { font-size: 17px; margin: 0 0 12px; }
 .division-screen .small { font-size: 13px; color: var(--ink2); }
 .division-screen .num { font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
 .division-screen .seg { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 4px; margin-bottom: 12px; }
