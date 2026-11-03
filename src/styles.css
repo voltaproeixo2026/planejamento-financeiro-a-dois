@@ -131,6 +131,52 @@
   .summary-debts li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
 
+/* Division-only reference styling; other screens remain independent. */
+.division-screen { min-width: 0; }
+.division-screen .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; min-width: 0; }
+.division-screen h2 { font-size: 18px; line-height: 1.2; margin: 0 0 12px; }
+.division-screen .small { font-size: 13px; color: var(--ink2); }
+.division-screen .num { font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
+.division-screen .seg { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 4px; margin-bottom: 12px; }
+.division-screen .seg button { border: 0; background: transparent; border-radius: 7px; padding: 9px 4px; height: auto; font-size: 13px; font-weight: 600; color: var(--ink2); white-space: normal; }
+.division-screen .seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 0 0 1px var(--line); }
+.division-screen .rangehead { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.division-screen input[type="range"] { width: 100%; accent-color: var(--accent); margin: 6px 0 2px; }
+.division-screen .person { display: grid; gap: 10px; }
+.division-screen .person header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.division-screen .person header h2 { margin: 0; overflow-wrap: anywhere; }
+.division-screen .person header .small { text-align: right; }
+.division-screen .person .num { font-size: 26px; overflow-wrap: anywhere; }
+.division-screen .account-caption { font-family: var(--font-body); font-weight: 500; }
+.division-screen .meter { height: 10px; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.division-screen .meter svg { display: block; }
+.division-screen .meter rect { fill: var(--accent); }
+.division-screen .meter.hot rect { fill: var(--warn); }
+.division-screen .meter-caption { margin-top: 6px; }
+.division-screen .kv { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px 12px; font-size: 14px; margin: 0; }
+.division-screen .kv dt { color: var(--ink2); }
+.division-screen .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.division-screen .section-caption { margin-bottom: 12px; }
+.division-screen .grid2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.division-screen .fld { display: grid; gap: 4px; min-width: 0; }
+.division-screen .fld > span { font-size: 11px; text-transform: uppercase; color: var(--reference-muted); font-weight: 600; }
+.division-screen .in { width: 100%; min-width: 0; height: 42px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 0 10px 0 34px; font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; box-shadow: none; }
+.division-screen .money { position: relative; }
+.division-screen .money::before { content: "R$"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--reference-muted); pointer-events: none; }
+.division-screen .plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.division-screen .plan li { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; gap: 10px; align-items: center; font-size: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.division-screen .plan li:last-child { border-bottom: 0; padding-bottom: 0; }
+.division-screen .plan li:only-child.small { display: block; }
+.division-screen .plan .d { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.division-screen .plan .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.division-screen .receipt-label { display: block; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) { .division-screen .meter rect { transition: width .25s ease; } }
+@media (min-width: 900px) {
+  .division-screen { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; align-items: start; }
+  .division-screen .card { padding: 20px; margin-bottom: 0; }
+  .division-screen .wide { grid-column: 1 / -1; }
+}
+
 /* Reference shell only: screen content is migrated separately. */
 .debt-screen { min-width: 0; }
 .debt-top-numbers { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--line); }
