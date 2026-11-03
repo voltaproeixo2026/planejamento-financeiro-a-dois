@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAppState } from "@/lib/household";
-import { BRL, debtSummary, fmtDate, incomeReceipts, itemsForMonth, toCents, uid, type Freq, type Person } from "@/lib/finance";
+import { BRL, debtSummary, fmtDate, incomeReceipts, itemsForMonth, toCents, uid, type Freq, type Person, billsForMonth, inputToYm, ymToInput, type CatKey, type FinanceState } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
 import { togglePaid } from "./Dashboard";
 
@@ -110,45 +110,43 @@ function Extras({ month }: { month: string }) {
   );
 }
 
+const catLabel: Record<CatKey, string> = { divida: "Dívidas", casa: "Casa", alim: "Alimentação", pet: "Pet", outros: "Outros" };
+const billFreqLabel: Record<Freq, string> = { mensal: "Mensal", quinzenal: "Quinzenal", semanal: "Semanal" };
+
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
-  const today = new Date().toISOString().slice(0, 10);
-  const [f, setF] = useState({ name: "", category: "", amount: "", day: "10", person: "", start: month, end: "" });
+  const st0 = s as unknown as FinanceState;
+  const [f, setF] = useState({ name: "", cat: "casa" as CatKey, amount: "", freq: "mensal" as Freq, day: "10", month });
   const add = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = toCents(f.amount), day = Number(f.day);
+    const amount = toCents(f.amount), day = Number(f.day), ym = inputToYm(f.month);
     if (!f.name.trim() || amount <= 0) { toast.error("Informe nome e valor maior que zero."); return; }
-    if (day < 1 || day > 31) { toast.error("Dia deve estar entre 1 e 31."); return; }
-    if (f.end && f.end < f.start) { toast.error("O fim não pode ser antes do início."); return; }
-    if (s.bills.some((b) => b.name.toLowerCase() === f.name.trim().toLowerCase() && b.day === day)) { toast.error("Já existe uma conta com esse nome e dia."); return; }
-    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: f.start, end: f.end || undefined, paid: {} }] }));
+    if (day < 1 || day > 30) { toast.error("Dia deve estar entre 1 e 30."); return; }
+    if (!Number.isFinite(ym)) { toast.error("Escolha o mês."); return; }
+    const seriesId = uid();
+    if ((st0.bills || []).some((b) => b.seriesId === seriesId && b.ym === ym)) { toast.error("Essa conta já está lançada neste mês"); return; }
+    update((st) => { const fs = st as unknown as FinanceState; return { ...fs, bills: [...(fs.bills || []), { id: uid(), name: f.name.trim(), cat: f.cat, amount, freq: f.freq, day, ym, seriesId, isLast: false }] } as unknown as typeof st; });
     setF({ ...f, name: "", amount: "" }); toast.success("Conta adicionada.");
   };
-  const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
+  const items = billsForMonth(st0.bills || [], inputToYm(month));
   return (
-    <Section title="Contas fixas" desc="Entram automaticamente em cada mês entre início e fim.">
-      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
+    <Section title="Contas fixas" desc="Cada conta vale a partir do mês escolhido e se repete até ser marcada como última.">
+      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <F label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></F>
-        <F label="Categoria"><Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} /></F>
+        <F label="Categoria"><NativeSelect value={f.cat} onChange={(e) => setF({ ...f, cat: e.target.value as CatKey })}>{Object.entries(catLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
-        <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
-        <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
-        <F label="Início"><Input type="month" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></F>
-        <F label="Fim (opcional)"><Input type="month" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></F>
+        <F label="Frequência"><NativeSelect value={f.freq} onChange={(e) => setF({ ...f, freq: e.target.value as Freq })}>{Object.entries(billFreqLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect></F>
+        <F label="Vencimento (dia)"><Input type="number" min="1" max="30" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
+        <F label="Mês"><Input type="month" value={f.month} onChange={(e) => setF({ ...f, month: e.target.value })} /></F>
         <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
       </form>
-      {items.length ? <ul className="divide-y">{items.map((i) => {
-        const b = s.bills.find((x) => x.id === i.refId);
-        if (!b) return null;
-        return (
-          <li key={i.key} className="flex flex-wrap items-center justify-between gap-2 py-3">
-            <div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{b.category || "Sem categoria"} · vence {fmtDate(i.date)} · {i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}</p></div>
-            <div className="flex items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} />
-              <Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month)}>{i.paid ? "Desfazer" : "Marcar paga"}</Button>
-              <Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => ({ ...st, bills: st.bills.filter((x) => x.id !== b.id) }))}><Trash2 className="h-4 w-4" /></Button></div>
-          </li>
-        );
-      })}</ul> : <Empty>Nenhuma conta fixa neste mês.</Empty>}
+      {items.length ? <ul className="divide-y">{items.map((b) => (
+        <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+          <div><p className="font-medium">{b.name}</p><p className="text-xs text-muted-foreground">{catLabel[b.cat] ?? "Outros"} · {billFreqLabel[b.freq] ?? "Mensal"} · vence dia {b.day}{b.ym !== undefined ? ` · desde ${ymToInput(b.ym)}` : ""}</p></div>
+          <div className="flex items-center gap-2"><b>{BRL(b.amount)}</b>
+            <Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => { const fs = st as unknown as FinanceState; return { ...fs, bills: fs.bills.filter((x) => x.id !== b.id) } as unknown as typeof st; })}><Trash2 className="h-4 w-4" /></Button></div>
+        </li>
+      ))}</ul> : <Empty>Nenhuma conta fixa neste mês.</Empty>}
     </Section>
   );
 }
