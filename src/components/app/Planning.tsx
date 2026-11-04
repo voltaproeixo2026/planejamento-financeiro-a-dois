@@ -4,19 +4,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppState } from '@/lib/household';
 import { BRL, toCents, uid } from '@/lib/finance';
-import { goalView, reserveView, savingsView, type Goal, type GoalState } from '@/lib/planning-model';
+import { goalMonthsAt, goalView, reserveView, savingsView, type Goal, type GoalState } from '@/lib/planning-model';
 import { Empty, Section } from './ui-bits';
 
 export function Planning({ month }: { month: string }) {
   const { s, update } = useAppState();
-  const { base, cushion, potential } = savingsView(s, month);
+  const { base, cushion, potential, weakPotential } = savingsView(s, month);
   const goals = (s as GoalState).goals ?? [];
   const reserve = reserveView(s, month);
   const edit = (id: string, patch: Partial<Goal>) => update(st => ({ ...st, goals: ((st as GoalState).goals ?? []).map(g => g.id === id ? { ...g, ...patch } : g) }));
   return <div className="space-y-6">
     <Section title="O que dá para guardar">
       <p className="text-3xl font-semibold text-success">{BRL(potential)}</p>
-      <p className="mt-2 text-sm text-muted-foreground">Estimativa do mês, depois das contas, do dinheiro livre e do colchão para o próximo mês ({BRL(cushion)}).</p>
+      <p className="mt-2 text-sm text-muted-foreground">Estimativa do mês sem contar extras, depois das contas, do dinheiro livre e do colchão para o próximo mês ({BRL(cushion)}). Se a renda autônoma vier a 70%: {BRL(weakPotential)}.</p>
       <p className="mt-2 text-sm">Receitas do mês: {BRL(base.totalIncome)} · Já guardado de fato: {BRL(s.savedReal)}</p>
       <div className="mt-4 max-w-xs space-y-1"><Label htmlFor="saved-real">Atualizar valor guardado (R$)</Label><Input id="saved-real" type="number" min="0" step="0.01" value={s.savedReal / 100} onChange={e => update(st => ({ ...st, savedReal: Math.max(0, toCents(e.target.value)) }))} /></div>
     </Section>
@@ -30,7 +30,7 @@ export function Planning({ month }: { month: string }) {
           <div className="space-y-1"><Label htmlFor={`goal-share-${g.id}`}>Parte da poupança (%)</Label><Input id={`goal-share-${g.id}`} type="number" min="0" max="100" value={g.share} onChange={e => edit(g.id, { share: Math.min(100, Math.max(0, Number(e.target.value))) })} /></div>
         </div>
         <progress className="mt-4 h-2 w-full accent-primary" value={view.progress} max={100} />
-        <p className="mt-2 text-sm text-muted-foreground">{g.target <= 0 ? 'Defina quanto essa meta precisa.' : view.months === 0 ? 'Meta batida.' : view.months === null ? 'Sem parte da poupança para esta meta ainda.' : `${BRL(view.allocation)} por mês · ${view.months} meses para atingir a meta.`}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{g.target <= 0 ? 'Defina quanto essa meta precisa.' : view.months === 0 ? 'Meta batida.' : view.months === null ? 'Sem parte da poupança para esta meta ainda.' : `${BRL(view.allocation)} por mês · ${view.months} meses para atingir a meta.`}{view.months !== null && view.months > 0 && <span className="block">No mês fraco: {goalMonthsAt(g, weakPotential) === null ? 'sem sobra suficiente' : `${goalMonthsAt(g, weakPotential)} meses`}.</span>}</p>
       </Section>;
     }) : <Empty>Nenhuma meta cadastrada.</Empty>}</div>
     <Button id="add-goal" variant="outline" onClick={() => update(st => ({ ...st, goals: [...((st as GoalState).goals ?? []), { id: uid(), name: 'Nova meta', target: 0, saved: 0, share: 0 }] }))}><Plus />Adicionar meta</Button>

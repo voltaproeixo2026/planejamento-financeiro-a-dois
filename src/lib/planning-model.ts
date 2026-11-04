@@ -1,12 +1,21 @@
-import { addMonths, BRL, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Person } from './finance';
+import { addMonths, BRL, daysIn, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
 
 export function savingsView(s: AppState, month: string) {
-  const base = summarize(s, month);
+  // Recurring savings: extras are one-off money, so they never count here.
+  const noExtras = { ...s, extras: [] };
+  const base = summarize(noExtras, month);
   const cushion = s.cushion[addMonths(month, 1)] ?? s.cushion[month] ?? 0;
-  return { base, cushion, potential: Math.max(0, base.leftover - cushion) };
+  const weakBase = summarize(noExtras, month, { factor: incomeScenarioControl.initial / 100 });
+  return { base, cushion, potential: Math.max(0, base.leftover - cushion), weakPotential: Math.max(0, weakBase.leftover - cushion) };
+}
+/** Months to reach a goal at a given monthly savings (null when nothing is allocated). */
+export function goalMonthsAt(goal: Goal, monthly: number) {
+  const allocation = Math.round(monthly * goal.share / 100);
+  const remaining = Math.max(0, goal.target - goal.saved);
+  return remaining === 0 ? 0 : allocation > 0 ? Math.ceil(remaining / allocation) : null;
 }
 export function goalView(goal: Goal, monthly: number) {
   const allocation = Math.round(monthly * goal.share / 100);
@@ -128,4 +137,37 @@ export function reserveView(s: AppState, month: string) {
   const bills = itemsForMonth(s, month).filter(i => i.kind === 'bill').reduce((total, i) => total + i.amount, 0);
   const shares = ((s as GoalState).goals ?? []).reduce((total, g) => total + g.share, 0);
   return { minimum: bills * 3, maximum: bills * 6, shares };
+}
+export interface FlowDay { day: number; balance: number; moves: Move[]; inflow: number; outflow: number }
+/** Joint-account balance at the end of each day (day 0 is the opening balance). Uses the existing cash-flow moves. */
+export function flowDays(s: AppState, month: string) {
+  const cf = jointCashflow(s, month);
+  const n = daysIn(month);
+  const byDay: Move[][] = Array.from({ length: n + 1 }, () => []);
+  // Pending transfers of a past month are dated today by the cash-flow model; keep them inside the month shown.
+  for (const m of cf.moves) byDay[m.date.startsWith(month) ? Number(m.date.slice(8, 10)) : m.date > month ? n : 1]?.push(m);
+  let balance = cf.start;
+  const days: FlowDay[] = [{ day: 0, balance, moves: [], inflow: 0, outflow: 0 }];
+  for (let d = 1; d <= n; d++) {
+    const moves = byDay[d] ?? [];
+    const inflow = moves.filter(m => m.type === 'entrada').reduce((a, m) => a + m.amount, 0);
+    const outflow = moves.filter(m => m.type === 'saída').reduce((a, m) => a + m.amount, 0);
+    balance += inflow - outflow;
+    days.push({ day: d, balance, moves, inflow, outflow });
+  }
+  return { start: cf.start, days, minBalance: cf.minBalance, needed: cf.start + Math.max(0, -cf.minBalance) };
+}
+
+/** Round axis values: step chosen among 1, 2, 2.5, 5 and 10 times a power of ten. */
+export function niceTicks(min: number, max: number, target = 5): number[] {
+  const lo = Math.min(min, 0), hi = Math.max(max, 0);
+  const span = hi - lo || 1;
+  const raw = span / target, pow = 10 ** Math.floor(Math.log10(raw));
+  const step = ([1, 2, 2.5, 5, 10].map(m => m * pow).find(x => x >= raw) ?? raw);
+  const out: number[] = [];
+  for (let v = Math.floor(lo / step) * step; ; v += step) {
+    out.push(Math.round(v * 100) / 100);
+    if (v >= hi - step * 1e-9) break;
+  }
+  return out;
 }

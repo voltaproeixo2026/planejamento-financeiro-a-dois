@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState } from './finance';
-import { goalView, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView } from './planning-model';
+import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks } from './planning-model';
 
 describe('Planning models', () => {
   it('preserves savings after reserving the next-month cushion', () => {
@@ -77,5 +77,53 @@ describe('Summary reference values', () => {
     expect(allocationView(s, month).map(g => [g.category, g.value])).toEqual([
       ['divida', 10000], ['casa', 100000], ['alim', 10000], ['pet', 10000], ['outros', 10000], ['livre', 8000], ['poup', 452000],
     ]);
+  });
+});
+describe('Mês e Metas', () => {
+  const month = '2026-10';
+  const st = () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.incomes = [
+      { id: 'fixed', desc: 'Salário', person: 0, amount: 300000, freq: 'monthly', day: 5, active: true, autonomous: false },
+      { id: 'auto', desc: 'Serviços', person: 1, amount: 100000, freq: 'monthly', day: 20, active: true, autonomous: true },
+    ];
+    s.bills = [{ id: 'rent', name: 'Aluguel', category: 'Casa', amount: 100000, day: 10, person: null, shared: true, start: month, paid: {} }];
+    return s;
+  };
+  it('daily balance starts at the opening balance and moves on the day of each movement', () => {
+    const s = st();
+    s.cushion = { [month]: 20000 };
+    const f = flowDays(s, month);
+    expect(f.days).toHaveLength(32);
+    expect(f.days[0]?.balance).toBe(20000);
+    expect(f.days[1]?.balance).toBe(20000);
+    const rent = f.days[10]!;
+    expect(rent.moves.some(m => m.desc === 'Aluguel' && m.type === 'saída')).toBe(true);
+    expect(rent.balance).toBeLessThan(f.days[9]!.balance);
+  });
+  it('suggests the opening balance that keeps the joint account out of the red', () => {
+    const s = st();
+    s.cushion = { [month]: 0 };
+    s.transfers = [];
+    const f = flowDays(s, month);
+    const s2 = { ...s, cushion: { [month]: f.needed } };
+    expect(flowDays(s2, month).minBalance).toBeGreaterThanOrEqual(0);
+  });
+  it('axis ticks are round values that include zero', () => {
+    const t = niceTicks(-130000, 480000);
+    expect(t).toContain(0);
+    const step = t[1]! - t[0]!;
+    expect([1, 2, 2.5, 5, 10].some(m => Number.isInteger(Math.round(Math.log10(step / m) * 1e6) / 1e6))).toBe(true);
+    expect(t[0]!).toBeLessThanOrEqual(-130000);
+    expect(t.at(-1)!).toBeGreaterThanOrEqual(480000);
+  });
+  it('savings ignore extras and the weak month is lower than the normal one', () => {
+    const s = st();
+    const without = savingsView(s, month);
+    s.extras = [{ id: 'x', desc: 'Extra', person: 1, amount: 50000, month, date: '2026-10-12' }];
+    expect(savingsView(s, month).potential).toBe(without.potential);
+    expect(without.weakPotential).toBeLessThan(without.potential);
+    const goal = { id: 'g', name: 'Viagem', target: 100000, saved: 0, share: 100 };
+    expect(goalMonthsAt(goal, without.weakPotential) ?? Infinity).toBeGreaterThanOrEqual(goalMonthsAt(goal, without.potential) ?? Infinity);
   });
 });
