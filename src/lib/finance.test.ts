@@ -1,192 +1,124 @@
 import { describe, expect, it } from "vitest";
-import { billsForMonth, compute, debtChanges, debtInfo, flow, forecast, goalMonths, greeting, inputToYm, monthIndex, monthStatus, ymToInput, type Bill, type FinanceState } from "./finance";
+import { debtChanges, debtSummary, editDebt, emptyState, itemsForMonth, lastTimeBill, newDebt, repeatBill, setBillMonthValue, splitAmount, stopBillFrom, summarize, transferPlan, weekdayDates, type AppState, type Bill } from "./finance";
 
-// Outubro de 2026 = 2026 * 12 + 9
-const NOW = 24321;
+const base = (): AppState => ({ ...emptyState(["Bianca", "Julio"]) });
 
-const base = (): FinanceState => ({
-  method: "prop",
-  customPctA: 60,
-  weak: 70,
-  start: 700,
-  weekly: { a: 40, b: 40 },
-  incomes: [
-    { id: "i1", owner: "a", kind: "fixa", label: "Salário", amount: 2200, day: 7 },
-    { id: "i2", owner: "b", kind: "autonoma", label: "Autônoma", amount: 900, day: 15 },
-  ],
-  bills: [{ id: "b1", name: "Água", cat: "casa", amount: 70, freq: "mensal", day: 8 }],
-  debts: [
-    { id: "d1", name: "Financiamento", origin: "Banco", owner: "both", amount: 650, total: 48, ref: 12, refYM: NOW, day: 10 },
-    { id: "d2", name: "Cartão do pai", origin: "Cartão", owner: "b", amount: 400, total: 10, ref: 9, refYM: NOW, day: 12 },
-  ],
-  extras: [
-    { id: "x1", ym: NOW, owner: "b", label: "Personal a mais", amount: 300, day: 20 },
-    { id: "x2", ym: NOW + 1, owner: "b", label: "Outro", amount: 100, day: 5 },
-  ],
-  goals: [],
-});
-
-const r = Math.round;
-
-describe("extras de renda", () => {
-  it("somam na renda do mês e só naquele mês", () => {
-    const sem = compute({ ...base(), extras: [] }, NOW);
-    const com = compute(base(), NOW);
-    expect(r(sem.inc)).toBe(3100);
-    expect(r(com.inc)).toBe(3400);
-    expect(com.incB).toBe(1200);
-    expect(r(com.sobra - sem.sobra)).toBe(300);
-    expect(r(compute(base(), NOW + 1).inc)).toBe(3200);
-    expect(r(compute(base(), NOW + 2).inc)).toBe(3100);
+describe("finance rules", () => {
+  it("default split is 50/50 and never loses cents", () => {
+    expect(base().split).toEqual([50, 50]);
+    expect(splitAmount(1001, 50)).toEqual([501, 500]);
   });
-
-  it("não entram no cenário de mês fraco", () => {
-    expect(r(compute(base(), NOW).sobraWeak)).toBe(r(compute({ ...base(), extras: [] }, NOW).sobraWeak));
+  it("weekly occurrences follow the calendar, not a fixed 4", () => {
+    expect(weekdayDates("2026-03", 0).length).toBe(5); // March 2026 has 5 Sundays
+    expect(weekdayDates("2026-02", 0).length).toBe(4);
   });
-
-  it("aparecem no fluxo no dia certo", () => {
-    const c = compute(base(), NOW);
-    const ex = flow(base(), c).ev.find((e) => e.extra);
-    expect(ex?.day).toBe(20);
-    expect(r(ex!.amt)).toBe(164);
-  });
-});
-
-describe("divisão e fluxo", () => {
-  it("as partes somam as contas e as transferências fecham com elas", () => {
+  it("extras count only in their month", () => {
     const s = base();
-    const c = compute(s, NOW);
-    expect(r(c.shareA + c.shareB)).toBe(r(c.bills));
-    const transfers = flow(s, c).ev.filter((e) => e.who).reduce((t, e) => t + e.amt, 0);
-    expect(r(transfers)).toBe(r(c.bills));
+    s.extras.push({ id: "e", desc: "Bônus", amount: 10000, person: 0, date: "2026-03-10", month: "2026-03" });
+    expect(summarize(s, "2026-03").totalIncome).toBe(10000);
+    expect(summarize(s, "2026-04").totalIncome).toBe(0);
   });
-
-  it("dívida de uma pessoa fica só com ela", () => {
-    const c = compute({ ...base(), extras: [] }, NOW);
-    const sem = compute({ ...base(), extras: [], debts: [base().debts[0]] }, NOW);
-    expect(r(c.shareB - sem.shareB)).toBeGreaterThanOrEqual(400);
-  });
-});
-
-describe("parcelas das dívidas", () => {
-  it("avançam todo mês e a última some da conta", () => {
+  it("individual bills are excluded from the shared split", () => {
     const s = base();
-    expect(compute(s, NOW).debts.map((x) => `${x.cur}/${x.total}`)).toEqual(["12/48", "9/10"]);
-    expect(compute(s, NOW + 1).debts.map((x) => x.cur)).toEqual([13, 10]);
-    const m2 = compute(s, NOW + 2);
-    expect(m2.debts[1].status).toBe("quitada");
-    expect(r(m2.debtsMonth)).toBe(650);
+    s.bills.push({ id: "a", name: "Aluguel", category: "", amount: 200000, day: 10, person: null, shared: true, start: "2026-01", paid: {} });
+    s.bills.push({ id: "b", name: "Celular", category: "", amount: 5000, day: 10, person: 0, shared: false, start: "2026-01", paid: {} });
+    const r = summarize(s, "2026-03");
+    expect(r.sharedTotal).toBe(200000);
+    expect(r.share).toEqual([100000, 100000]);
   });
-
-  it("uma dívida de 10 parcelas começando na 3ª quita 8 meses depois", () => {
-    const d = { ...base().debts[1], ref: 3 };
-    expect(debtInfo(d, NOW + 7).status).toBe("ativa");
-    expect(debtInfo(d, NOW + 8).status).toBe("quitada");
+  it("debt installments appear only within schedule and don't auto-pay", () => {
+    const s = base();
+    s.debts.push({ id: "d", name: "TV", total: 30000, installments: 3, amount: 10000, paidCount: 0, firstDue: "2026-01-05", person: null, shared: true });
+    expect(summarize(s, "2026-02").debtInstallments).toBe(10000);
+    expect(summarize(s, "2026-04").debtInstallments).toBe(0);
+    expect(debtSummary(s.debts[0]!).remaining).toBe(30000);
   });
-
-  it("a previsão aponta quando uma parcela termina", () => {
-    const list = forecast(base(), 3, NOW);
-    const ch = debtChanges(list);
-    expect(ch).toHaveLength(1);
-    expect(ch[0]).toMatchObject({ kind: "termina", debtId: "d2", ym: NOW + 2, amount: 400 });
+  it("transfer plan does not double count transfers already made", () => {
+    const s = base();
+    s.incomes.push({ id: "i", desc: "Salário", person: 0, amount: 500000, freq: "monthly", day: 25, active: true, autonomous: false });
+    s.bills.push({ id: "a", name: "Aluguel", category: "", amount: 200000, day: 28, person: null, shared: true, start: "2026-01", paid: {} });
+    s.transfers.push({ id: "t", person: 0, amount: 40000, date: "2026-03-02", month: "2026-03" });
+    const plan = transferPlan(s, "2026-03", "2026-03-01").filter((p) => p.person === 0);
+    expect(plan.reduce((a, p) => a + p.amount, 0)).toBe(60000);
+  });
+  it("autonomous income simulation leaves fixed income untouched", () => {
+    const s = base();
+    s.incomes.push({ id: "f", desc: "Salário", person: 0, amount: 100000, freq: "monthly", day: 5, active: true, autonomous: false });
+    s.incomes.push({ id: "a", desc: "Freela", person: 1, amount: 100000, freq: "monthly", day: 5, active: true, autonomous: true });
+    expect(summarize(s, "2026-03", { factor: 0.7 }).income).toEqual([100000, 70000]);
   });
 });
+
 
 describe("contas fixas por mês", () => {
-  const bill = (id: string, seriesId: string, ym: number | undefined, amount: number, extra: Partial<Bill> = {}): Bill => ({
-    id, seriesId, ym, name: seriesId, cat: "casa", amount, freq: "mensal", day: 8, ...extra,
+  const bill = (extra: Partial<Bill> = {}): Bill => ({ id: "agua", name: "Água", category: "Casa", amount: 7000, day: 8, person: null, shared: true, start: "2026-10", paid: {}, ...extra });
+  const state = (b: Bill) => ({ ...emptyState(["A", "B"]), bills: [b] });
+  const total = (b: Bill, m: string) => itemsForMonth(state(b), m).filter((i) => i.kind === "bill").reduce((a, i) => a + i.amount, 0);
+
+  it("repete o último valor nos meses seguintes e não aparece antes do início", () => {
+    const b = bill();
+    expect(total(b, "2026-10")).toBe(7000);
+    expect(total(b, "2026-12")).toBe(7000);
+    expect(total(b, "2026-09")).toBe(0);
   });
 
-  it("a conta repete o último valor nos meses seguintes", () => {
-    const all = [bill("1", "agua", NOW, 70), bill("2", "agua", NOW + 1, 80)];
-    const v = (ym: number) => billsForMonth(all, ym).map((b) => b.amount);
-    expect(v(NOW)).toEqual([70]);
-    expect(v(NOW + 1)).toEqual([80]);
-    expect(v(NOW + 5)).toEqual([80]); // repete o último valor lançado
-    expect(v(NOW - 1)).toEqual([]); // antes da primeira vez
+  it("mudar o valor de um mês vale dali em diante e nunca altera os anteriores", () => {
+    const b = setBillMonthValue(bill(), "2026-11", 9000);
+    expect(total(b, "2026-10")).toBe(7000);
+    expect(total(b, "2026-11")).toBe(9000);
+    expect(total(b, "2027-02")).toBe(9000);
+    const c = setBillMonthValue(b, "2026-12", 8000);
+    expect(total(c, "2026-11")).toBe(9000);
+    expect(total(c, "2026-12")).toBe(8000);
   });
 
-  it("a mesma conta pode existir em meses diferentes, com o mesmo nome e dia", () => {
-    const all = [bill("1", "agua", NOW, 70), bill("2", "agua", NOW + 1, 90)];
-    expect(billsForMonth(all, NOW + 1)).toHaveLength(1);
-    expect(billsForMonth(all, NOW + 1)[0].id).toBe("2");
+  it("repetir no próximo mês copia nome, categoria e valor, e pode ser editado depois", () => {
+    const r = repeatBill(bill(), "2026-10");
+    expect(r.status).toBe("created");
+    expect(r.bill).toMatchObject({ name: "Água", category: "Casa" });
+    expect(total(r.bill, "2026-11")).toBe(7000);
+    expect(total(setBillMonthValue(r.bill, "2026-11", 7500), "2026-11")).toBe(7500);
+    expect(repeatBill(r.bill, "2026-10").status).toBe("exists");
   });
 
-  it("'última vez' para de repetir depois daquele mês", () => {
-    const all = [bill("1", "net", NOW, 100), bill("2", "net", NOW + 1, 100, { isLast: true })];
-    expect(billsForMonth(all, NOW + 1)).toHaveLength(1);
-    expect(billsForMonth(all, NOW + 2)).toHaveLength(0);
+  it("repetir uma conta que terminava neste mês estende até o mês seguinte", () => {
+    const b = lastTimeBill(bill(), "2026-10");
+    expect(total(b, "2026-11")).toBe(0);
+    const r = repeatBill(b, "2026-10");
+    expect(r.bill.end).toBe("2026-11");
+    expect(total(r.bill, "2026-11")).toBe(7000);
+    expect(total(r.bill, "2026-12")).toBe(0);
   });
 
-  it("contas sem mês (formato antigo) valem sempre", () => {
-    const all = [bill("1", "x", undefined, 50)];
-    expect(billsForMonth(all, NOW + 7)).toHaveLength(1);
+  it("'última vez' e 'parar a partir deste mês' deixam os meses anteriores intactos", () => {
+    const b = setBillMonthValue(bill(), "2026-12", 9000);
+    const last = lastTimeBill(b, "2026-11");
+    expect(total(last, "2026-11")).toBe(7000);
+    expect(total(last, "2026-12")).toBe(0);
+    const stopped = stopBillFrom(b, "2026-12");
+    expect(stopped?.end).toBe("2026-11");
+    expect(total(stopped!, "2026-11")).toBe(7000);
+    expect(total(stopped!, "2026-12")).toBe(0);
+    expect(stopBillFrom(bill(), "2026-10")).toBeNull();
   });
 
-  it("o valor do mês muda o total e a previsão", () => {
-    const s: FinanceState = { ...base(), bills: [bill("1", "agua", NOW, 70), bill("2", "agua", NOW + 1, 120)] };
-    const c0 = compute(s, NOW), c1 = compute(s, NOW + 1), c2 = compute(s, NOW + 2);
-    expect(r(c1.bills - c0.bills)).toBe(50);
-    expect(c2.cats.casa).toBe(120); // novembro repete em dezembro (o total muda porque uma dívida termina)
-    expect(c0.cats.casa).toBe(70);
-    expect(c1.cats.casa).toBe(120);
-    const f = flow(s, c1);
-    expect(f.ev.find((e) => e.label === "agua")?.amt).toBe(-120);
+  it("a conta paga é registrada por mês", () => {
+    const b = bill({ paid: { "2026-10": true } });
+    const items = (m: string) => itemsForMonth(state(b), m).filter((i) => i.kind === "bill");
+    expect(items("2026-10")[0]?.paid).toBe(true);
+    expect(items("2026-11")[0]?.paid).toBe(false);
   });
 });
 
 describe("dívida que começa em outro mês", () => {
-  const futura = (startYm: number) => ({ ...base().debts[1], id: "d3", ref: 1, refYM: startYm });
-
-  it("não entra nas contas antes do mês de início", () => {
-    const s: FinanceState = { ...base(), extras: [], debts: [futura(NOW + 1)] };
-    const c0 = compute(s, NOW), c1 = compute(s, NOW + 1);
-    expect(c0.debts[0].status).toBe("futura");
-    expect(c0.debts[0].startYM).toBe(NOW + 1);
-    expect(r(c0.debtsMonth)).toBe(0);
-    expect(flow(s, c0).ev.some((e) => e.label.startsWith("Cartão"))).toBe(false);
-    expect(c1.debts[0]).toMatchObject({ status: "ativa", cur: 1 });
-    expect(r(c1.debtsMonth)).toBe(400);
-  });
-
-  it("aparece na previsão como 'começa' e continua contando no que falta pagar", () => {
-    const s: FinanceState = { ...base(), extras: [], debts: [futura(NOW + 1)] };
-    const ch = debtChanges(forecast(s, 3, NOW));
-    expect(ch).toEqual([{ kind: "comeca", ym: NOW + 1, debtId: "d3", name: "Cartão do pai", amount: 400 }]);
-    expect(compute(s, NOW).debtsLeft).toBe(4000);
-  });
-
-  it("helpers de mês do campo month", () => {
-    expect(ymToInput(NOW)).toBe("2026-10");
-    expect(inputToYm("2026-11")).toBe(NOW + 1);
-    expect(inputToYm("2027-01")).toBe(2027 * 12);
-    expect(Number.isNaN(inputToYm(""))).toBe(true);
-  });
-});
-
-describe("metas e saudação", () => {
-  it("goalMonths", () => {
-    expect(goalMonths(0, 10)).toBe(0);
-    expect(goalMonths(5, 0)).toBeNull();
-    expect(goalMonths(1000, 300)).toBe(4);
-  });
-
-  it("saudação pelo horário", () => {
-    expect(greeting(new Date(2026, 9, 20, 8))).toBe("Bom dia");
-    expect(greeting(new Date(2026, 9, 20, 15))).toBe("Boa tarde");
-    expect(greeting(new Date(2026, 9, 20, 22))).toBe("Boa noite");
-    expect(greeting(new Date(2026, 9, 20, 3))).toBe("Boa noite");
-  });
-
-  it("monthIndex", () => {
-    expect(monthIndex(new Date(2026, 9, 20))).toBe(NOW);
-  });
-
-  it("monthStatus separa o que já venceu do que falta", () => {
-    const s = base();
-    const f = flow(s, compute(s, NOW));
-    const st = monthStatus(f, 20);
-    expect(st.paid + st.remaining).toBe(st.total);
-    expect(st.paid).toBeGreaterThan(0);
+  it("só entra nas contas a partir do mês de início", () => {
+    const d = editDebt(newDebt("2026-11"), { name: "Cartão", amount: 40000, installments: 10, person: null, shared: true }, "2026-11", 1);
+    const s = { ...emptyState(["A", "B"]), debts: [d] };
+    expect(summarize(s, "2026-10").debtInstallments).toBe(0);
+    expect(itemsForMonth(s, "2026-10")).toHaveLength(0);
+    expect(summarize(s, "2026-11").debtInstallments).toBe(40000);
+    expect(summarize(s, "2026-12").debtInstallments).toBe(40000);
+    expect(debtChanges(s, "2026-10", 3)).toMatchObject([{ label: "Começa", month: "2026-11", amount: 40000 }]);
+    expect(debtSummary(d).remaining).toBe(400000);
   });
 });

@@ -18,7 +18,7 @@ describe('Debt editing', () => {
   it('stores current installment reference and edited origin, owner, amount and count', () => {
     household.state = { ...emptyState(['Bianca', 'Julio']), debts: [newDebt('2026-10')] };
     render(<DebtEditor month="2026-10" />);
-    fireEvent.change(screen.getByLabelText('Parcela deste mês'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Esta parcela é a número'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Onde é a dívida'), { target: { value: 'Banco' } });
     fireEvent.change(screen.getByLabelText('Responsável'), { target: { value: 'both' } });
     fireEvent.change(screen.getByLabelText('Valor da parcela (R$)'), { target: { value: '250.50' } });
@@ -27,6 +27,18 @@ describe('Debt editing', () => {
     expect(d).toMatchObject({ ref: 3, ref_ym: '2026-10', origin: 'Banco', shared: true, person: null, amount: 25050, installments: 12, total: 300600, paidCount: 0 });
     if (!d) throw new Error('Debt missing');
     expect(debtCur(d, '2026-11')).toBe(4);
+  });
+  it('lets a debt start in a later month and keeps it out of the current month', () => {
+    household.state = { ...emptyState(['Bianca', 'Julio']), debts: [{ ...newDebt('2026-10'), amount: 40000, installments: 10 }] };
+    const view = render(<DebtEditor month="2026-10" />);
+    fireEvent.change(screen.getByLabelText('e cai em'), { target: { value: '2026-11' } });
+    const d = household.state.debts[0];
+    if (!d) throw new Error('Debt missing');
+    expect(d).toMatchObject({ ref: 1, ref_ym: '2026-11' });
+    expect(debtCur(d, '2026-10')).toBe(0);
+    expect(debtCur(d, '2026-11')).toBe(1);
+    view.rerender(<DebtEditor month="2026-10" />);
+    expect(screen.getByText(/Ainda não entra nas contas deste mês/)).toBeTruthy();
   });
   it('switches the forecast from three to six and twelve months immediately', () => {
     household.state = { ...emptyState(['Bianca', 'Julio']), debts: [newDebt('2026-10')] };

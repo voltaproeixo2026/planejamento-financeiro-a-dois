@@ -1,264 +1,386 @@
-/**
- * Lógica de cálculo do Contas do Casal.
- * É um porte fiel da página atual (funções puras, sem tela e sem banco).
- * NÃO reescreva estas funções dentro de componentes: importe daqui.
- *
- * Convenções:
- * - "ym" é o índice do mês: ano * 12 + (mês de 0 a 11). Ex.: outubro de 2026 = 2026 * 12 + 9 = 24321.
- * - O mês é tratado como 30 dias. Dias de vencimento ficam entre 1 e 30.
- * - "a" e "b" são as duas pessoas. Quem é quem vem dos nomes na tabela config.
- */
+// Centralized financial model and calculations. All money values are integer cents.
 
-export type Who = "a" | "b";
-export type Owner = Who | "both";
-export type Method = "prop" | "half" | "custom";
-export type CatKey = "divida" | "casa" | "alim" | "pet" | "outros";
-export type Freq = "mensal" | "quinzenal" | "semanal";
+export type Person = 0 | 1;
+export type Freq = "monthly" | "biweekly" | "weekly";
 
-export interface Income { id: string; owner: Who; kind: "fixa" | "autonoma"; label: string; amount: number; day: number }
-/**
- * Conta fixa de UM mês.
- * - ym: mês a que esta linha se refere.
- * - seriesId: identifica a mesma conta ao longo dos meses (Água de outubro e Água de novembro têm o mesmo seriesId).
- * - isLast: esta é a última vez que a conta aparece (não repete nos meses seguintes).
- * Sem ym, a conta vale para todos os meses (formato antigo).
- */
-export interface Bill { id: string; name: string; cat: CatKey; amount: number; freq: Freq; day: number; ym?: number; seriesId?: string; isLast?: boolean }
-export interface Debt { id: string; name: string; origin: string; owner: Owner; amount: number; total: number; ref: number; refYM: number; day: number }
-export interface Extra { id: string; ym: number; owner: Who; label: string; amount: number; day: number }
-export interface Goal { id: string; name: string; target: number; saved: number; share: number }
+export interface Income {
+  id: string;
+  desc: string;
+  person: Person;
+  amount: number; // cents per occurrence
+  freq: Freq;
+  day: number; // monthly/biweekly: day of month (1-31); weekly: weekday 0-6
+  active: boolean;
+  autonomous: boolean;
+}
+export interface Extra { id: string; desc: string; amount: number; person: Person; date: string; month: string }
+export interface Bill {
+  id: string; name: string; category: string; amount: number; day: number;
+  person: Person | null; shared: boolean; start: string; end?: string | undefined;
+  paid: Record<string, boolean>; // month -> paid
+  /** Optional value changes by month ("YYYY-MM" -> cents). A value holds from that month on, until the next change. */
+  values?: Record<string, number> | undefined;
+}
+export interface Debt {
+  id: string; name: string; total: number; installments: number; amount: number;
+  paidCount: number; firstDue: string; person: Person | null; shared: boolean;
+  overrides?: Record<number, number> | undefined; // installment index -> custom amount
+  origin?: string;
+  ref?: number;
+  ref_ym?: string;
+}
+export interface Transfer { id: string; person: Person; amount: number; date: string; month: string }
 
-export interface FinanceState {
-  method: Method;
-  customPctA: number;
-  weak: number; // % da renda autônoma no cenário de mês fraco (30 a 100)
-  start: number; // saldo da conta conjunta no dia 1
-  weekly: { a: number; b: number }; // dinheiro livre por semana
+export interface AppState {
+  names: [string, string];
   incomes: Income[];
+  extras: Extra[];
   bills: Bill[];
   debts: Debt[];
-  extras: Extra[];
-  goals: Goal[];
+  split: [number, number];
+  weeklyFree: [number, number];
+  freeWeekday: number;
+  cushion: Record<string, number>;
+  transfers: Transfer[];
+  savedReal: number;
+  isExample: boolean;
 }
 
-export const clamp = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
-export const num = (v: unknown): number => {
-  const n = parseFloat(String(v));
-  return Number.isFinite(n) ? n : 0;
+export const BRL = (c: number) =>
+  (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const toCents = (v: string | number) => Math.round(Number(String(v).replace(",", ".")) * 100) || 0;
+export const fmtDate = (iso: string) => {
+  const [y, m, d] = iso.split("-");
+  return d ? `${d}/${m}/${y}` : `${m}/${y}`;
 };
-export const dayOf = (v: unknown) => clamp(Math.round(num(v)) || 1, 1, 30);
+const parseMonth = (m: string): [number, number] => {
+  const [y, mo] = m.split("-").map(Number);
+  return [y ?? 0, mo ?? 1];
+};
+export const monthLabel = (m: string) => {
+  const [y, mo] = parseMonth(m);
+  return new Date(y, mo - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+};
+export const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** Índice do mês de uma data (usa o fuso do aparelho). */
-export const monthIndex = (d: Date = new Date()) => d.getFullYear() * 12 + d.getMonth();
+export const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+export const addMonths = (m: string, n: number) => {
+  const [y, mo] = parseMonth(m);
+  return ym(new Date(y, mo - 1 + n, 1));
+};
+export const monthsBetween = (a: string, b: string) => {
+  const [ya, ma] = parseMonth(a);
+  const [yb, mb] = parseMonth(b);
+  return (yb - ya) * 12 + (mb - ma);
+};
+export const daysIn = (m: string) => {
+  const [y, mo] = parseMonth(m);
+  return new Date(y, mo, 0).getDate();
+};
+const iso = (m: string, day: number) => `${m}-${String(Math.min(day, daysIn(m))).padStart(2, "0")}`;
 
-export function monthlyOf(b: Pick<Bill, "amount" | "freq">): number {
-  const a = num(b.amount);
-  return b.freq === "semanal" ? (a * 52) / 12 : b.freq === "quinzenal" ? a * 2 : a;
+/** Dates in the month on which a given weekday occurs (not assuming 4 per month). */
+export function weekdayDates(m: string, weekday: number): string[] {
+  const [y, mo] = parseMonth(m);
+  const out: string[] = [];
+  for (let d = 1; d <= daysIn(m); d++) if (new Date(y, mo - 1, d).getDay() === weekday) out.push(iso(m, d));
+  return out;
 }
 
-/** Texto do campo <input type="month"> ("2026-11") para o índice do mês, e de volta. */
-export const inputToYm = (v: string): number => {
-  const m = /^(\d{4})-(\d{2})$/.exec(v);
-  return m ? Number(m[1]) * 12 + (Number(m[2]) - 1) : NaN;
-};
-export const ymToInput = (ym: number): string => `${Math.floor(ym / 12)}-${String((ym % 12) + 1).padStart(2, "0")}`;
-
-/**
- * Contas fixas valendo em um mês.
- * Cada conta (seriesId) usa a linha do próprio mês; se não houver, repete a linha mais recente de um mês anterior.
- * Linhas marcadas como última (isLast) não repetem nos meses seguintes.
- */
-export function billsForMonth(all: Bill[], ym: number): Bill[] {
-  const best = new Map<string, Bill>();
-  for (const b of all || []) {
-    const bym = b.ym ?? -Infinity;
-    if (bym > ym) continue;
-    const key = b.seriesId ?? b.id;
-    const cur = best.get(key);
-    if (!cur || bym > (cur.ym ?? -Infinity)) best.set(key, b);
+/** Receipt dates and amounts of an income in a month. factor applies to autonomous incomes (simulation). */
+export function incomeReceipts(inc: Income, m: string, factor = 1) {
+  if (!inc.active) return [];
+  const amt = Math.round(inc.amount * (inc.autonomous ? factor : 1));
+  if (inc.freq === "monthly") return [{ date: iso(m, inc.day), amount: amt }];
+  if (inc.freq === "biweekly") {
+    const d2 = inc.day + 15 > daysIn(m) ? inc.day - 15 : inc.day + 15;
+    return [inc.day, d2].sort((a, b) => a - b).map((d) => ({ date: iso(m, Math.max(1, d)), amount: amt }));
   }
-  return Array.from(best.values()).filter((b) => !(b.isLast && (b.ym ?? -Infinity) < ym));
+  return weekdayDates(m, inc.day).map((date) => ({ date, amount: amt }));
 }
 
-export function sumIncome(s: Pick<FinanceState, "incomes">, who: Who, autonomaFactor?: number): number {
-  return s.incomes
-    .filter((i) => i.owner === who)
-    .reduce((t, i) => t + num(i.amount) * (autonomaFactor !== undefined && i.kind === "autonoma" ? autonomaFactor : 1), 0);
+export interface Item {
+  key: string; kind: "bill" | "debt"; refId: string; name: string; date: string;
+  amount: number; paid: boolean; shared: boolean; person: Person | null; installment?: number;
 }
 
-export function extrasOf(s: Pick<FinanceState, "extras">, who: Who, ym: number): number {
-  return (s.extras || []).filter((x) => x.owner === who && Number(x.ym) === ym).reduce((t, x) => t + num(x.amount), 0);
+export function debtInstallment(d: Debt, m: string) {
+  const k = debtCur(d, m) - 1;
+  if (k < 0 || k >= d.installments) return null;
+  return { index: k, amount: d.overrides?.[k] ?? d.amount, paid: k < d.paidCount, date: iso(m, Number(d.firstDue.slice(8, 10))) };
 }
 
-/** Número da parcela no mês `now`, a partir da parcela de referência e do mês em que ela foi informada. */
-export function debtCur(d: Pick<Debt, "ref" | "refYM">, now: number): number {
-  const ref = Math.round(num(d.ref)) || 1;
-  const r = Number(d.refYM);
-  return ref + (now - (Number.isFinite(r) && r > 0 ? r : now));
+/** Optional reference metadata keeps existing debts backwards compatible. */
+export function debtCur(d: Debt, month: string) {
+  if (d.ref !== undefined && d.ref_ym) return d.ref + monthsBetween(d.ref_ym, month);
+  return monthsBetween(d.firstDue.slice(0, 7), month) + 1;
 }
 
-export type DebtStatus = "ativa" | "futura" | "quitada";
-export interface DebtInfo {
-  total: number; amt: number; cur: number; left: number; active: boolean; status: DebtStatus;
-  grand: number; remaining: number; endYM: number; startYM: number;
-}
-export function debtInfo(d: Debt, now: number): DebtInfo {
-  const total = Math.max(1, Math.round(num(d.total)) || 1);
-  const amt = num(d.amount);
-  const cur = debtCur(d, now);
-  const left = cur > total ? 0 : total - Math.max(cur, 1) + 1;
-  return {
-    total, amt, cur, left,
-    active: cur >= 1 && cur <= total,
-    status: cur > total ? "quitada" : cur < 1 ? "futura" : "ativa",
-    grand: amt * total,
-    remaining: amt * left,
-    endYM: now + (total - cur),
-    startYM: now + (1 - cur),
-  };
+export function editDebt(d: Debt, patch: Partial<Debt>, month: string, current?: number): Debt {
+  const next = { ...d, ...patch };
+  if (current !== undefined) {
+    if (!Number.isInteger(current) || current < 1) return d;
+    next.ref = current;
+    next.ref_ym = month;
+    next.firstDue = `${addMonths(month, 1 - current)}-${d.firstDue.slice(8, 10)}`;
+  }
+  next.total = next.amount * next.installments;
+  return next;
 }
 
-export interface DebtView extends DebtInfo { d: Debt }
-
-export function compute(s: FinanceState, now: number) {
-  const debts: DebtView[] = (s.debts || []).map((d) => ({ d, ...debtInfo(d, now) }));
-  let dA = 0, dB = 0, dS = 0;
-  debts.forEach((x) => {
-    if (!x.active) return;
-    if (x.d.owner === "a") dA += x.amt;
-    else if (x.d.owner === "b") dB += x.amt;
-    else dS += x.amt;
-  });
-  const debtsMonth = dA + dB + dS;
-  const debtsLeft = debts.reduce((t, x) => t + x.remaining, 0);
-  const monthBills = billsForMonth(s.bills, now);
-  const billsGen = monthBills.reduce((t, b) => t + monthlyOf(b), 0);
-  const bills = billsGen + debtsMonth;
-
-  const baseA = sumIncome(s, "a"), baseB = sumIncome(s, "b");
-  const exA = extrasOf(s, "a", now), exB = extrasOf(s, "b", now);
-  const incA = baseA + exA, incB = baseB + exB, inc = incA + incB;
-
-  const shared = billsGen + dS; // contas divididas pela regra escolhida
-  const pctS = s.method === "half" ? 0.5 : s.method === "custom" ? clamp(num(s.customPctA), 0, 100) / 100 : inc > 0 ? incA / inc : 0.5;
-  const shareA = shared * pctS + dA; // dívidas com responsável ficam só com ele
-  const shareB = shared - shared * pctS + dB;
-  const pctA = bills > 0 ? shareA / bills : pctS;
-
-  const livreA = (num(s.weekly.a) * 52) / 12, livreB = (num(s.weekly.b) * 52) / 12;
-  const sobraA = incA - shareA - livreA, sobraB = incB - shareB - livreB, sobra = sobraA + sobraB;
-
-  // Mês fraco: autônoma reduzida e SEM extras
-  const w = clamp(num(s.weak), 0, 100) / 100;
-  const sobraWeak = sumIncome(s, "a", w) + sumIncome(s, "b", w) - bills - livreA - livreB;
-
-  const cats: Record<CatKey, number> = { divida: 0, casa: 0, alim: 0, pet: 0, outros: 0 };
-  monthBills.forEach((b) => {
-    const k: CatKey = cats[b.cat] === undefined ? "outros" : b.cat;
-    cats[k] += monthlyOf(b);
-  });
-  cats.divida += debtsMonth;
-
-  return { now, monthBills, baseA, baseB, exA, exB, bills, incA, incB, inc, pctA, shareA, shareB, livreA, livreB, sobraA, sobraB, sobra, sobraWeak, cats, debts, debtsMonth, debtsLeft };
+export function newDebt(month: string): Debt {
+  return { id: uid(), name: 'Nova dívida', origin: '', amount: 0, total: 0, installments: 10,
+    paidCount: 0, firstDue: `${month}-10`, person: 0, shared: false, ref: 1, ref_ym: month };
 }
-export type Computed = ReturnType<typeof compute>;
 
-export interface FlowEvent { day: number; label: string; amt: number; who?: Who; extra?: boolean; after?: number }
+/** Is the fixed bill in force in month m (from start to end, both included)? */
+export const billActive = (b: Bill, m: string) => m >= b.start && !(b.end && m > b.end);
 
-/** Movimentos da conta conjunta no mês (transferências de cada um e contas a pagar) e saldo dia a dia. */
-export function flow(s: FinanceState, c: Computed) {
-  const ev: FlowEvent[] = [];
-  s.incomes.forEach((i) => {
-    const amt = num(i.amount);
-    const tot = i.owner === "a" ? c.incA : c.incB;
-    const share = i.owner === "a" ? c.shareA : c.shareB;
-    if (amt > 0 && tot > 0) ev.push({ day: dayOf(i.day), label: i.label || "Renda", who: i.owner, amt: (share * amt) / tot });
-  });
-  (s.extras || []).forEach((x) => {
-    if (Number(x.ym) !== c.now) return;
-    const amt = num(x.amount);
-    const tot = x.owner === "a" ? c.incA : c.incB;
-    const share = x.owner === "a" ? c.shareA : c.shareB;
-    if (amt > 0 && tot > 0) ev.push({ day: dayOf(x.day), label: x.label || "Extra", who: x.owner, amt: (share * amt) / tot, extra: true });
-  });
-  c.monthBills.forEach((b) => {
-    const a = num(b.amount);
-    if (a <= 0) return;
-    const d = dayOf(b.day);
-    let days: number[];
-    if (b.freq === "semanal") {
-      days = [];
-      for (let k = ((d - 1) % 7) + 1; k <= 30; k += 7) days.push(k);
-    } else if (b.freq === "quinzenal") days = [d, d <= 15 ? d + 15 : d - 15];
-    else days = [d];
-    days.forEach((x) => ev.push({ day: x, label: b.name || "Conta", amt: -a }));
-  });
-  c.debts.forEach((x) => {
-    if (x.active && x.amt > 0) ev.push({ day: dayOf(x.d.day), label: `${x.d.name || "Dívida"} (${x.cur}/${x.total})`, amt: -x.amt });
-  });
-  ev.sort((p, q) => p.day - q.day || Number(q.amt > 0) - Number(p.amt > 0));
+/** Month the bill's value for m was last set in (start month when never changed). */
+export function billValueMonth(b: Bill, m: string): string {
+  let best = b.start;
+  for (const k of Object.keys(b.values ?? {})) if (k <= m && k > best) best = k;
+  return best;
+}
 
-  const series = (start: number) => {
-    const bal = [start];
-    let cur = start;
-    for (let d = 1; d <= 30; d++) {
-      ev.forEach((e) => { if (e.day === d) cur += e.amt; });
-      bal.push(cur);
+/** Value of a fixed bill in month m: the last value set at or before m, else the original amount. */
+export function billAmount(b: Bill, m: string): number {
+  const k = billValueMonth(b, m);
+  return b.values?.[k] ?? b.amount;
+}
+
+/** Changes only the value of month m (and the following months, until the next change). */
+export function setBillMonthValue(b: Bill, m: string, cents: number): Bill {
+  const next: Bill = { ...b, values: { ...b.values, [m]: cents } };
+  if (m === b.start) next.amount = cents;
+  return next;
+}
+
+export type RepeatResult = { bill: Bill; status: "created" | "exists" };
+/** Launches the bill in the next month with the same name, category and value. A bill that ended this month goes on. */
+export function repeatBill(b: Bill, m: string): RepeatResult {
+  const next = addMonths(m, 1);
+  if (billActive(b, next) && b.values && next in b.values) return { bill: b, status: "exists" };
+  const bill: Bill = { ...b, values: { ...b.values, [next]: billAmount(b, m) } };
+  if (b.end && b.end < next) bill.end = next;
+  return { bill, status: "created" };
+}
+
+/** Marks m as the last month of the bill. */
+export function lastTimeBill(b: Bill, m: string): Bill {
+  return { ...b, end: m, values: Object.fromEntries(Object.entries(b.values ?? {}).filter(([k]) => k <= m)) };
+}
+
+/** Stops the bill from month m on. Returns null when nothing would be left (the bill started in m or later). */
+export function stopBillFrom(b: Bill, m: string): Bill | null {
+  const prev = addMonths(m, -1);
+  return prev < b.start ? null : lastTimeBill(b, prev);
+}
+
+export function itemsForMonth(s: AppState, m: string): Item[] {
+  const items: Item[] = [];
+  for (const b of s.bills) {
+    if (!billActive(b, m)) continue;
+    items.push({ key: `b-${b.id}-${m}`, kind: "bill", refId: b.id, name: b.name, date: iso(m, b.day), amount: billAmount(b, m), paid: !!b.paid[m], shared: b.shared, person: b.person });
+  }
+  for (const d of s.debts) {
+    const i = debtInstallment(d, m);
+    if (!i) continue;
+    items.push({ key: `d-${d.id}-${m}`, kind: "debt", refId: d.id, name: `${d.name} (${i.index + 1}/${d.installments})`, date: i.date, amount: i.amount, paid: i.paid, shared: d.shared, person: d.person, installment: i.index });
+  }
+  return items.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function debtSummary(d: Debt) {
+  let paid = 0, remaining = 0;
+  for (let k = 0; k < d.installments; k++) {
+    const a = d.overrides?.[k] ?? d.amount;
+    if (k < d.paidCount) paid += a; else remaining += a;
+  }
+  return { paid, remaining, left: d.installments - d.paidCount, done: d.paidCount >= d.installments };
+}
+
+/** Splits an amount by percentages without losing cents. */
+export function splitAmount(total: number, pct0: number): [number, number] {
+  const a = Math.round((total * pct0) / 100);
+  return [a, total - a];
+}
+
+export interface MonthSummary {
+  income: [number, number]; recurring: [number, number]; extras: [number, number];
+  totalIncome: number; items: Item[]; paid: number; pending: number; overdue: Item[];
+  sharedTotal: number; share: [number, number]; individual: [number, number];
+  freeMoney: [number, number]; leftover: number; debtInstallments: number;
+  transferred: [number, number]; needTransfer: [number, number];
+}
+
+export function summarize(s: AppState, m: string, opts: { factor?: number | undefined; today?: string | undefined } = {}): MonthSummary {
+  const factor = opts.factor ?? 1;
+  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  const recurring: [number, number] = [0, 0];
+  for (const inc of s.incomes) for (const r of incomeReceipts(inc, m, factor)) recurring[inc.person] += r.amount;
+  const extras: [number, number] = [0, 0];
+  if (factor === 1 || opts.factor === undefined) for (const e of s.extras) if (e.month === m) extras[e.person] += e.amount;
+  const income: [number, number] = [recurring[0] + extras[0], recurring[1] + extras[1]];
+  const items = itemsForMonth(s, m);
+  const paid = items.filter((i) => i.paid).reduce((a, i) => a + i.amount, 0);
+  const pending = items.filter((i) => !i.paid).reduce((a, i) => a + i.amount, 0);
+  const overdue = items.filter((i) => !i.paid && i.date < today);
+  const sharedTotal = items.filter((i) => i.shared).reduce((a, i) => a + i.amount, 0);
+  const share = splitAmount(sharedTotal, s.split[0]);
+  const individual: [number, number] = [0, 0];
+  for (const i of items) if (!i.shared && i.person !== null) individual[i.person] += i.amount;
+  const weeks = weekdayDates(m, s.freeWeekday).length;
+  const freeMoney: [number, number] = [s.weeklyFree[0] * weeks, s.weeklyFree[1] * weeks];
+  const totalIncome = income[0] + income[1];
+  const leftover = totalIncome - (paid + pending) - freeMoney[0] - freeMoney[1];
+  const debtInstallments = items.filter((i) => i.kind === "debt").reduce((a, i) => a + i.amount, 0);
+  const transferred: [number, number] = [0, 0];
+  for (const t of s.transfers) if (t.month === m) transferred[t.person] += t.amount;
+  const cushion = s.cushion[m] ?? 0;
+  // Cushion in the joint account reduces what must be transferred, split by the same rule.
+  const cushionShare = splitAmount(Math.min(cushion, sharedTotal), s.split[0]);
+  const needTransfer: [number, number] = [
+    Math.max(0, share[0] - cushionShare[0] - transferred[0]),
+    Math.max(0, share[1] - cushionShare[1] - transferred[1]),
+  ];
+  return { income, recurring, extras, totalIncome, items, paid, pending, overdue, sharedTotal, share, individual, freeMoney, leftover, debtInstallments, transferred, needTransfer };
+}
+
+/** Spreads each person's remaining need across their upcoming receipts, proportional to receipt size. */
+export function transferPlan(s: AppState, m: string, today = new Date().toISOString().slice(0, 10)) {
+  const sum = summarize(s, m, { today });
+  const plan: { person: Person; date: string; amount: number; reason: string }[] = [];
+  ([0, 1] as Person[]).forEach((p) => {
+    let need = sum.needTransfer[p];
+    if (need <= 0) return;
+    const receipts = s.incomes.filter((i) => i.person === p).flatMap((i) => incomeReceipts(i, m).map((r) => ({ ...r, desc: i.desc })))
+      .concat(s.extras.filter((e) => e.person === p && e.month === m).map((e) => ({ date: e.date, amount: e.amount, desc: e.desc })))
+      .filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+    if (!receipts.length) {
+      plan.push({ person: p, date: today, amount: need, reason: "Nenhum recebimento restante no mês — valor pendente da sua parte." });
+      return;
     }
-    return bal;
-  };
-  const bal = series(num(s.start));
-  const buffer = Math.max(0, -Math.min(...series(0)));
-  let min = Infinity, minDay = 1;
-  for (let d = 1; d <= 30; d++) if (bal[d] < min) { min = bal[d]; minDay = d; }
-  let cur = num(s.start);
-  const list = ev.map((e) => { cur += e.amt; return { ...e, after: cur }; });
-  return { ev: list, bal, buffer, min, minDay };
-}
-export type Flow = ReturnType<typeof flow>;
-
-/** Meses até juntar `remaining` poupando `monthly` por mês. null = não avança. */
-export function goalMonths(remaining: number, monthly: number): number | null {
-  if (remaining <= 0) return 0;
-  if (monthly <= 0) return null;
-  return Math.ceil(remaining / monthly);
-}
-
-/** Cálculo de n meses a partir de `now` (mês atual = índice 0). */
-export function forecast(s: FinanceState, n: number, now: number): Computed[] {
-  const out: Computed[] = [];
-  for (let k = 0; k < n; k++) out.push(compute(s, now + k));
-  return out;
-}
-
-export interface DebtChange { kind: "termina" | "comeca"; ym: number; debtId: string; name: string; amount: number }
-
-/** Parcelas que terminam ou começam ao longo da previsão. `ym` é o primeiro mês com a mudança. */
-export function debtChanges(list: Computed[]): DebtChange[] {
-  const out: DebtChange[] = [];
-  for (let k = 1; k < list.length; k++) {
-    list[k].debts.forEach((x) => {
-      const p = list[k - 1].debts.find((y) => y.d.id === x.d.id);
-      if (!p) return;
-      if (p.active && !x.active && x.status === "quitada") out.push({ kind: "termina", ym: list[k].now, debtId: x.d.id, name: x.d.name, amount: p.amt });
-      else if (!p.active && x.active) out.push({ kind: "comeca", ym: list[k].now, debtId: x.d.id, name: x.d.name, amount: x.amt });
+    const total = receipts.reduce((a, r) => a + r.amount, 0);
+    receipts.forEach((r, idx) => {
+      const amt = idx === receipts.length - 1 ? need : Math.min(need, Math.round((sum.needTransfer[p] * r.amount) / total));
+      need -= amt;
+      if (amt > 0) plan.push({ person: p, date: r.date, amount: amt, reason: `Parte de ${s.split[p]}% das contas compartilhadas, ao receber "${r.desc}".` });
     });
+  });
+  return plan.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface Move { date: string; desc: string; type: "entrada" | "saída"; amount: number; status: "realizado" | "previsto"; balance: number }
+
+export function jointCashflow(s: AppState, m: string, today = new Date().toISOString().slice(0, 10)) {
+  const moves: Omit<Move, "balance">[] = [];
+  for (const t of s.transfers.filter((t) => t.month === m))
+    moves.push({ date: t.date, desc: `Transferência de ${s.names[t.person]}`, type: "entrada", amount: t.amount, status: "realizado" });
+  for (const p of transferPlan(s, m, today))
+    moves.push({ date: p.date, desc: `Transferência prevista de ${s.names[p.person]}`, type: "entrada", amount: p.amount, status: "previsto" });
+  for (const i of itemsForMonth(s, m).filter((i) => i.shared))
+    moves.push({ date: i.date, desc: i.name, type: "saída", amount: i.amount, status: i.paid ? "realizado" : "previsto" });
+  moves.sort((a, b) => a.date.localeCompare(b.date) || (a.type === "entrada" ? -1 : 1));
+  const start = s.cushion[m] ?? 0;
+  let bal = start, current = start;
+  const out: Move[] = moves.map((mv) => {
+    bal += mv.type === "entrada" ? mv.amount : -mv.amount;
+    if (mv.status === "realizado") current += mv.type === "entrada" ? mv.amount : -mv.amount;
+    return { ...mv, balance: bal };
+  });
+  return { start, moves: out, current, projectedEnd: bal, minBalance: Math.min(start, ...out.map((o) => o.balance)) };
+}
+
+export function projection(s: AppState, from: string, months: number, factor = 1) {
+  return Array.from({ length: months }, (_, i) => {
+    const m = addMonths(from, i);
+    const sum = summarize(s, m, { factor: factor === 1 ? undefined : factor });
+    const debtsLeft = s.debts.reduce((a, d) => {
+      let r = 0;
+      for (let k = 0; k < d.installments; k++) {
+        const due = addMonths(d.firstDue.slice(0, 7), k);
+        if (k >= d.paidCount && due > m) r += d.overrides?.[k] ?? d.amount;
+      }
+      return a + r;
+    }, 0);
+    return { month: m, income: sum.totalIncome, expenses: sum.paid + sum.pending + sum.freeMoney[0] + sum.freeMoney[1], leftover: sum.leftover, debtsLeft };
+  });
+}
+
+export function forecast(s: AppState, from: string, count: number) {
+  return projection(s, from, count).map((p, k, all) => ({
+    ...p, installments: summarize(s, p.month).debtInstallments,
+    variation: k === 0 ? null : summarize(s, p.month).debtInstallments - summarize(s, all[k - 1]?.month ?? p.month).debtInstallments,
+    debts: s.debts.map(d => ({ id: d.id, current: debtCur(d, p.month), total: d.installments, installment: debtInstallment(d, p.month) })),
+  }));
+}
+
+export function debtChanges(s: AppState, from: string, count: number) {
+  const changes: { id: string; label: 'Termina' | 'Começa'; name: string; month: string; previousMonth: string; amount: number }[] = [];
+  for (let k = 1; k < count; k++) {
+    const month = addMonths(from, k), previousMonth = addMonths(month, -1);
+    for (const d of s.debts) {
+      const previous = debtInstallment(d, previousMonth), current = debtInstallment(d, month);
+      if (previous && !current) changes.push({ id: `${d.id}-${month}`, label: 'Termina', name: d.name, month, previousMonth, amount: previous.amount });
+      else if (!previous && current) changes.push({ id: `${d.id}-${month}`, label: 'Começa', name: d.name, month, previousMonth, amount: current.amount });
+    }
   }
+  return changes;
+}
+
+export function alerts(s: AppState, m: string, today = new Date().toISOString().slice(0, 10)) {
+  const out: { level: "danger" | "warn" | "info"; text: string }[] = [];
+  const sum = summarize(s, m, { today });
+  for (const o of sum.overdue) out.push({ level: "danger", text: `${o.name} venceu em ${fmtDate(o.date)} — ${BRL(o.amount)}` });
+  const soon = new Date(today); soon.setDate(soon.getDate() + 5);
+  const soonIso = soon.toISOString().slice(0, 10);
+  for (const i of sum.items.filter((i) => !i.paid && i.date >= today && i.date <= soonIso))
+    out.push({ level: "warn", text: `${i.name} vence em ${fmtDate(i.date)} — ${BRL(i.amount)}` });
+  if (sum.leftover < 0) out.push({ level: "danger", text: `Despesas superam as receitas do mês em ${BRL(-sum.leftover)}` });
+  const cf = jointCashflow(s, m, today);
+  if (cf.minBalance < 0) out.push({ level: "danger", text: `A conta conjunta fica negativa em algum momento do mês (mínimo ${BRL(cf.minBalance)})` });
+  ([0, 1] as Person[]).forEach((p) => {
+    if (sum.needTransfer[p] > 0) out.push({ level: "info", text: `${s.names[p]} ainda precisa transferir ${BRL(sum.needTransfer[p])} para a conta conjunta` });
+  });
+  const auto = s.incomes.filter((i) => i.autonomous && i.active);
+  if (auto.length) {
+    const sim = summarize(s, m, { factor: 0.7 });
+    if (sim.leftover < 0) out.push({ level: "warn", text: `Se a renda autônoma vier 30% menor, faltariam ${BRL(-sim.leftover)}` });
+  }
+  const open = s.debts.filter((d) => !debtSummary(d).done);
+  if (open.length) out.push({ level: "info", text: `${open.length} dívida(s) com parcelas futuras — saldo ${BRL(open.reduce((a, d) => a + debtSummary(d).remaining, 0))}` });
   return out;
 }
 
-/** Saudação pela hora do aparelho. */
-export function greeting(date: Date = new Date()): string {
-  const h = date.getHours();
-  return h >= 5 && h < 12 ? "Bom dia" : h >= 12 && h < 18 ? "Boa tarde" : "Boa noite";
+export function exampleState(today = new Date()): AppState {
+  const m = ym(today);
+  return {
+    names: ["Bianca", "Julio"],
+    incomes: [
+      { id: uid(), desc: "Salário", person: 0, amount: 520000, freq: "monthly", day: 5, active: true, autonomous: false },
+      { id: uid(), desc: "Serviços autônomos", person: 1, amount: 220000, freq: "biweekly", day: 10, active: true, autonomous: true },
+    ],
+    extras: [],
+    bills: [
+      { id: uid(), name: "Aluguel", category: "Moradia", amount: 220000, day: 10, person: null, shared: true, start: m, paid: {} },
+      { id: uid(), name: "Mercado", category: "Alimentação", amount: 120000, day: 15, person: null, shared: true, start: m, paid: {} },
+      { id: uid(), name: "Internet", category: "Casa", amount: 12000, day: 20, person: null, shared: true, start: m, paid: {} },
+      { id: uid(), name: "Celular Bianca", category: "Pessoal", amount: 6000, day: 12, person: 0, shared: false, start: m, paid: {} },
+    ],
+    debts: [
+      { id: uid(), name: "Geladeira", total: 360000, installments: 10, amount: 36000, paidCount: 3, firstDue: `${addMonths(m, -3)}-08`, person: null, shared: true },
+    ],
+    split: [50, 50],
+    weeklyFree: [15000, 15000],
+    freeWeekday: 1,
+    cushion: { [m]: 50000 },
+    transfers: [],
+    savedReal: 0,
+    isExample: true,
+  };
 }
 
-/** Situação do mês até hoje, pelos dias de vencimento (hoje conta como "falta pagar"). */
-export function monthStatus(f: Flow, today: number) {
-  const td = clamp(today, 1, 30);
-  const outs = f.ev.filter((e) => e.amt < 0 && !e.who);
-  const paid = outs.filter((e) => e.day < td).reduce((t, e) => t - e.amt, 0);
-  const todo = outs.filter((e) => e.day >= td);
-  const remaining = todo.reduce((t, e) => t - e.amt, 0);
-  return { paid, remaining, todo, total: paid + remaining };
+export function emptyState(names: [string, string]): AppState {
+  return { names, incomes: [], extras: [], bills: [], debts: [], split: [50, 50], weeklyFree: [0, 0], freeWeekday: 1, cushion: {}, transfers: [], savedReal: 0, isExample: false };
 }

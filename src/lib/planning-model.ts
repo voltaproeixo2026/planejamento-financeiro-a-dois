@@ -61,7 +61,7 @@ export function debtHomeView(s: AppState, month: string) {
 export function debtSituation(d: Debt, month: string) {
   const current = debtCur(d, month), balance = debtSummary(d);
   if (balance.done) return 'Quitada.';
-  if (current < 1) return `Começa em ${monthLabel(d.firstDue.slice(0, 7))}.`;
+  if (current < 1) return `Começa em ${monthLabel(d.firstDue.slice(0, 7))}. Ainda não entra nas contas deste mês.`;
   if (current > d.installments) return `Parcelas encerradas. Falta pagar: ${BRL(balance.remaining)}.`;
   const lastMonth = addMonths(month, d.installments - current);
   return `Parcela ${current} de ${d.installments} neste mês. ${current === d.installments ? 'É a última parcela.' : `Restam ${balance.left} (com esta): ${BRL(balance.remaining)}. Última em ${monthLabel(lastMonth)}.`}`;

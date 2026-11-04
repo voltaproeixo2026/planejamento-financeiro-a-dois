@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAppState } from "@/lib/household";
-import { BRL, debtSummary, fmtDate, incomeReceipts, itemsForMonth, toCents, uid, type Freq, type Person, billsForMonth, inputToYm, ymToInput, type CatKey, type FinanceState } from "@/lib/finance";
+import { BRL, addMonths, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
 import { togglePaid } from "./Dashboard";
 
@@ -110,43 +110,114 @@ function Extras({ month }: { month: string }) {
   );
 }
 
-const catLabel: Record<CatKey, string> = { divida: "Dívidas", casa: "Casa", alim: "Alimentação", pet: "Pet", outros: "Outros" };
-const billFreqLabel: Record<Freq, string> = { mensal: "Mensal", quinzenal: "Quinzenal", semanal: "Semanal" };
+function BillValue({ id, cents, onCommit }: { id: string; cents: number; onCommit: (cents: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const c = toCents(draft);
+    setDraft(null);
+    if (draft.trim() === "" || c <= 0) { toast.error("Informe um valor maior que zero."); return; }
+    if (c !== cents) onCommit(c);
+  };
+  return (
+    <Input id={id} aria-label="Valor neste mês (R$)" className="h-8 w-28 text-right" type="number" min="0" step="0.01"
+      value={draft ?? String(cents / 100)} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+  );
+}
+
+type Pending = { id: string; kind: "stop" | "delete" } | null;
 
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
-  const st0 = s as unknown as FinanceState;
-  const [f, setF] = useState({ name: "", cat: "casa" as CatKey, amount: "", freq: "mensal" as Freq, day: "10", month });
+  const today = new Date().toISOString().slice(0, 10);
+  const [f, setF] = useState({ name: "", category: "", amount: "", day: "10", person: "" });
+  const [dup, setDup] = useState(false);
+  const [pending, setPending] = useState<Pending>(null);
+  const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
+  const next = addMonths(month, 1);
+  const patchBill = (id: string, fn: (b: Bill) => Bill) => update((st) => ({ ...st, bills: st.bills.map((b) => (b.id === id ? fn(b) : b)) }));
+
+  const create = () => {
+    const amount = toCents(f.amount), day = Number(f.day);
+    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: month, paid: {} }] }));
+    setF({ ...f, name: "", amount: "" }); setDup(false); toast.success(`Conta adicionada em ${monthLabel(month)}. Ela se repete nos meses seguintes.`);
+  };
   const add = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = toCents(f.amount), day = Number(f.day), ym = inputToYm(f.month);
+    const amount = toCents(f.amount), day = Number(f.day);
     if (!f.name.trim() || amount <= 0) { toast.error("Informe nome e valor maior que zero."); return; }
-    if (day < 1 || day > 30) { toast.error("Dia deve estar entre 1 e 30."); return; }
-    if (!Number.isFinite(ym)) { toast.error("Escolha o mês."); return; }
-    const seriesId = uid();
-    if ((st0.bills || []).some((b) => b.seriesId === seriesId && b.ym === ym)) { toast.error("Essa conta já está lançada neste mês"); return; }
-    update((st) => { const fs = st as unknown as FinanceState; return { ...fs, bills: [...(fs.bills || []), { id: uid(), name: f.name.trim(), cat: f.cat, amount, freq: f.freq, day, ym, seriesId, isLast: false }] } as unknown as typeof st; });
-    setF({ ...f, name: "", amount: "" }); toast.success("Conta adicionada.");
+    if (!Number.isInteger(day) || day < 1 || day > 31) { toast.error("Dia deve estar entre 1 e 31."); return; }
+    // Same name and day in other months is normal (the bill repeats every month). Only warn about the same name in this month.
+    if (!dup && items.some((i) => i.name.trim().toLowerCase() === f.name.trim().toLowerCase())) { setDup(true); return; }
+    create();
   };
-  const items = billsForMonth(st0.bills || [], inputToYm(month));
+  const repeat = (b: Bill) => {
+    const r = repeatBill(b, month);
+    if (r.status === "exists") { toast.info(`${b.name} já está lançada em ${monthLabel(next)}.`); return; }
+    patchBill(b.id, () => r.bill); toast.success(`${b.name} lançada em ${monthLabel(next)}. Ajuste o valor lá, se mudar.`);
+  };
+  const repeatAll = () => {
+    let n = 0;
+    update((st) => ({ ...st, bills: st.bills.map((b) => { if (!billActive(b, month)) return b; const r = repeatBill(b, month); if (r.status === "created") n++; return r.bill; }) }));
+    toast.success(`Contas lançadas em ${monthLabel(next)}.`);
+  };
   return (
-    <Section title="Contas fixas" desc="Cada conta vale a partir do mês escolhido e se repete até ser marcada como última.">
-      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <F label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></F>
-        <F label="Categoria"><NativeSelect value={f.cat} onChange={(e) => setF({ ...f, cat: e.target.value as CatKey })}>{Object.entries(catLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect></F>
+    <Section title="Contas fixas" desc={`Mostrando ${monthLabel(month)}. Toda conta se repete nos meses seguintes com o último valor, e você muda o valor só do mês em que ele mudar.`}
+      action={items.length ? <Button size="sm" variant="outline" onClick={repeatAll}>Repetir todas em {monthLabel(next)}</Button> : undefined}>
+      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+        <F label="Nome"><Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDup(false); }} /></F>
+        <F label="Categoria"><Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} /></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
-        <F label="Frequência"><NativeSelect value={f.freq} onChange={(e) => setF({ ...f, freq: e.target.value as Freq })}>{Object.entries(billFreqLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</NativeSelect></F>
-        <F label="Vencimento (dia)"><Input type="number" min="1" max="30" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
-        <F label="Mês"><Input type="month" value={f.month} onChange={(e) => setF({ ...f, month: e.target.value })} /></F>
+        <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
+        <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
+        <F label="Começa em"><Input readOnly value={monthLabel(month)} className="capitalize" aria-label="Mês de início" /></F>
         <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
       </form>
-      {items.length ? <ul className="divide-y">{items.map((b) => (
-        <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-          <div><p className="font-medium">{b.name}</p><p className="text-xs text-muted-foreground">{catLabel[b.cat] ?? "Outros"} · {billFreqLabel[b.freq] ?? "Mensal"} · vence dia {b.day}{b.ym !== undefined ? ` · desde ${ymToInput(b.ym)}` : ""}</p></div>
-          <div className="flex items-center gap-2"><b>{BRL(b.amount)}</b>
-            <Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => { const fs = st as unknown as FinanceState; return { ...fs, bills: fs.bills.filter((x) => x.id !== b.id) } as unknown as typeof st; })}><Trash2 className="h-4 w-4" /></Button></div>
-        </li>
-      ))}</ul> : <Empty>Nenhuma conta fixa neste mês.</Empty>}
+      {dup && <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm">
+        <span>Já existe uma conta com esse nome em {monthLabel(month)}. Lançar mesmo assim?</span>
+        <Button size="sm" onClick={create}>Lançar mesmo assim</Button><Button size="sm" variant="ghost" onClick={() => setDup(false)}>Cancelar</Button>
+      </div>}
+      {items.length ? <ul className="divide-y">{items.map((i) => {
+        const b = s.bills.find((x) => x.id === i.refId);
+        if (!b) return null;
+        const source = billValueMonth(b, month);
+        const repeated = source !== month;
+        const last = b.end === month;
+        const confirming = pending?.id === b.id ? pending.kind : null;
+        return (
+          <li key={i.key} className="space-y-2 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium">{i.name}
+                  {repeated && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">repetida de {monthLabel(source)}</span>}
+                  {last && <span className="ml-2 rounded bg-warning px-1.5 py-0.5 text-xs font-normal text-warning-foreground">última vez</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">{b.category || "Sem categoria"} · vence {fmtDate(i.date)} · {i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <BillValue key={`${b.id}-${month}-${i.amount}`} id={`bill-value-${b.id}`} cents={i.amount} onCommit={(c) => patchBill(b.id, (x) => setBillMonthValue(x, month, c))} />
+                <Status paid={i.paid} overdue={i.date < today} />
+                <Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month)}>{i.paid ? "Desfazer" : "Marcar paga"}</Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={() => repeat(b)}>Repetir em {monthLabel(next)}</Button>
+              {!last && <Button size="sm" variant="ghost" onClick={() => { patchBill(b.id, (x) => lastTimeBill(x, month)); toast.success(`${b.name}: última vez em ${monthLabel(month)}.`); }}>Última vez neste mês</Button>}
+              <Button size="sm" variant="ghost" onClick={() => setPending({ id: b.id, kind: "stop" })}>Parar a partir deste mês</Button>
+              <Button size="sm" variant="ghost" className="text-destructive" aria-label={`Apagar ${b.name} em todos os meses`} onClick={() => setPending({ id: b.id, kind: "delete" })}><Trash2 className="h-4 w-4" />Apagar em todos os meses</Button>
+            </div>
+            {confirming && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm">
+              <span>{confirming === "stop" ? `${b.name} deixa de aparecer a partir de ${monthLabel(month)}. Os meses anteriores continuam como estão.` : `${b.name} some de todos os meses, inclusive dos anteriores. Isso não pode ser desfeito.`}</span>
+              <Button size="sm" variant="destructive" onClick={() => {
+                update((st) => ({ ...st, bills: confirming === "delete" ? st.bills.filter((x) => x.id !== b.id) : st.bills.flatMap((x) => { if (x.id !== b.id) return [x]; const r = stopBillFrom(x, month); return r ? [r] : []; }) }));
+                setPending(null); toast.success(confirming === "delete" ? "Conta apagada." : "Conta encerrada.");
+              }}>Confirmar</Button>
+              <Button size="sm" variant="ghost" onClick={() => setPending(null)}>Cancelar</Button>
+            </div>}
+          </li>
+        );
+      })}</ul> : <Empty>Nenhuma conta fixa neste mês.</Empty>}
     </Section>
   );
 }
