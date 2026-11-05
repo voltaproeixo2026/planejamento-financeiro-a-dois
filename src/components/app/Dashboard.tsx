@@ -4,7 +4,6 @@ import { useAppState } from '@/lib/household';
 import { addMonths, alerts, BRL, fmtDate, monthLabel, summarize, type AppState, type Item } from '@/lib/finance';
 import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
-import { IncomeScenario } from './IncomeScenario';
 import { Report } from './Report';
 
 export function togglePaid(update: ReturnType<typeof useAppState>['update'], i: Item, month: string) {
@@ -56,7 +55,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
       <dl className="grid grid-cols-2 gap-4"><div><dt className="text-sm text-muted-foreground">Parcelas das dívidas</dt><dd className="mt-2 text-2xl font-semibold">{BRL(next.debtInstallments)}</dd></div><div><dt className="text-sm text-muted-foreground">Sobra prevista</dt><dd className="mt-2 text-2xl font-semibold">{BRL(next.leftover)}</dd></div></dl>
       <Button className="mt-4" variant="outline" onClick={onDebts}>Ver os próximos meses</Button>
     </Section>
-    <IncomeScenario month={month} />
     <Section title="Para onde vai a renda">
       {allocation.length ? <><div id="bar" role="img" aria-label="Divisão da renda mensal por categoria" className="summary-income-bar">{allocation.map(g => <i key={g.name} className="summary-category" data-category={g.category} style={{ flexGrow: g.value }} title={`${g.name}: ${BRL(g.value)} (${g.percent}%)`} />)}</div><ul id="legend" className="summary-income-legend">{allocation.map(g => <li key={g.name}><span className="summary-category summary-swatch" data-category={g.category} /><span>{g.name}</span><b className="tabular-nums">{BRL(g.value)}</b><span className="summary-percent tabular-nums">{g.percent}%</span></li>)}</ul></> : <><div id="bar" /><ul id="legend"><li><Empty>Cadastre rendas e contas para ver a distribuição.</Empty></li></ul></>}
     </Section>

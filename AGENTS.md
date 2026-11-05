@@ -11,7 +11,7 @@
 
 - Keep the reference shell styling scoped to `.household-shell`; leaf screen layouts remain independent so visual migration can proceed one screen at a time.
 - Theme switching sets `data-theme` on the document only and defaults to system preference; it never uses financial persistence or browser storage.
-- The dedicated debt screen owns DebtEditor and multi-month forecasts; the summary owns the income scenario, and goals never render either, to avoid duplicated screen responsibilities.
+- The dedicated debt screen owns DebtEditor and multi-month forecasts; the income scenario card was removed from the summary on request (IncomeScenario.tsx is kept but not rendered), and goals never render the multi-month forecast, to avoid duplicated screen responsibilities.
 - Additive presentation models live in `src/lib/planning-model.ts` and delegate to existing finance functions; keep existing financial formulas and persistence unchanged, and store optional goal entries in the existing household JSON for backward compatibility without schema changes.
 - Summary allocation percentages and debt display fields belong to the presentation model; income simulation passes an extras-free state to the existing financial summary so its full-income endpoint still excludes extras without changing core formulas.
 - Debt reference metadata is optional in the existing household JSON; editDebt synchronizes firstDue with ref/ref_ym while preserving paidCount and overrides, and forecast/debtChanges delegate to the established finance calculations to keep legacy data and all screens consistent.
