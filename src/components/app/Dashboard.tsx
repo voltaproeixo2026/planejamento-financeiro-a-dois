@@ -1,7 +1,7 @@
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
-import { addMonths, alerts, BRL, fmtDate, monthLabel, summarize, type Item } from '@/lib/finance';
+import { addMonths, alerts, BRL, fmtDate, monthLabel, summarize, type AppState, type Item } from '@/lib/finance';
 import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { IncomeScenario } from './IncomeScenario';
@@ -18,6 +18,14 @@ export function togglePaid(update: ReturnType<typeof useAppState>['update'], i: 
   });
 }
 
+/** Debt installments are paid in order, so only the next one can be paid and only the last paid one undone. */
+export function canToggle(s: AppState, i: Item) {
+  if (i.kind === 'bill') return true;
+  const d = s.debts.find(x => x.id === i.refId);
+  if (!d || i.installment === undefined) return false;
+  return i.paid ? i.installment === d.paidCount - 1 : i.installment === d.paidCount;
+}
+
 export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => void }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
@@ -25,6 +33,7 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
   const next = summarize(s, addMonths(month, 1), { today });
   const attention = alerts(s, month, today);
   const upcoming = sum.items.filter(i => !i.paid).slice(0, 6);
+  const paidItems = sum.items.filter(i => i.paid);
   const allocation = allocationView(s, month);
   const totals = debtTotals(s, month);
   const debts = debtHomeView(s, month);
@@ -36,7 +45,11 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
         {[{ label: 'Entra no mês', value: sum.totalIncome }, { label: 'Já saiu', value: sum.paid }, { label: 'Falta pagar', value: sum.pending }, { label: 'Sobra prevista', value: sum.leftover }].map(x => <div key={x.label}><dt className="text-sm text-muted-foreground">{x.label}</dt><dd className="mt-1 text-2xl font-semibold">{BRL(x.value)}</dd></div>)}
       </dl>
       <h2 className="text-lg">Próximos vencimentos</h2>
-      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Compartilhada' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
+      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Compartilhada' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
+      <div id="paid-list" className="mt-6 border-t pt-4">
+        <h2 className="text-lg">Já pagas neste mês</h2>
+        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Compartilhada' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
+      </div>
     </section>
     <Section id="next-card" title="Previsão do próximo mês">
       <dl className="grid grid-cols-2 gap-4"><div><dt className="text-sm text-muted-foreground">Parcelas das dívidas</dt><dd className="mt-2 text-2xl font-semibold">{BRL(next.debtInstallments)}</dd></div><div><dt className="text-sm text-muted-foreground">Sobra prevista</dt><dd className="mt-2 text-2xl font-semibold">{BRL(next.leftover)}</dd></div></dl>

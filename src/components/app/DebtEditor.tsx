@@ -1,36 +1,110 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppState } from '@/lib/household';
-import { debtCur, editDebt, newDebt, toCents, type Debt, type Person } from '@/lib/finance';
+import { BRL, debtCur, editDebt, newDebt, toCents, type Debt, type Person } from '@/lib/finance';
 import { debtSituation } from '@/lib/planning-model';
 import { Empty, NativeSelect } from './ui-bits';
 
-export function DebtEditor({ month }: { month: string }) {
+interface Draft { name: string; origin: string; owner: string; amount: string; day: string; current: string; start: string; count: string }
+
+const toDraft = (d: Debt, month: string): Draft => ({
+  name: d.name, origin: d.origin ?? '', owner: d.shared ? 'both' : String(d.person ?? 0), amount: String(d.amount / 100),
+  day: String(Number(d.firstDue.slice(8, 10))), current: String(d.ref ?? debtCur(d, month)), start: d.ref_ym ?? month, count: String(d.installments),
+});
+
+/** Validates a draft and returns the saved debt, or an error message. */
+function applyDraft(d: Debt, f: Draft): Debt | string {
+  const amount = toCents(f.amount), day = Number(f.day), current = Number(f.current), count = Number(f.count);
+  if (!f.name.trim()) return 'Informe o nome da dívida.';
+  if (amount <= 0) return 'Informe o valor da parcela.';
+  if (!Number.isInteger(day) || day < 1 || day > 31) return 'O dia de vencimento deve estar entre 1 e 31.';
+  if (!Number.isInteger(count) || count < 1) return 'O total de parcelas deve ser 1 ou mais.';
+  if (!Number.isInteger(current) || current < 1 || current > count) return 'O número da parcela deve estar entre 1 e o total de parcelas.';
+  if (!/^\d{4}-\d{2}$/.test(f.start)) return 'Escolha o mês em que essa parcela cai.';
+  const owner = f.owner === 'both' ? { shared: true, person: null } : { shared: false, person: Number(f.owner) as Person };
+  const patch: Partial<Debt> = { name: f.name.trim(), origin: f.origin.trim(), amount, installments: count, ...owner, firstDue: `${d.firstDue.slice(0, 7)}-${String(day).padStart(2, '0')}` };
+  return editDebt(d, patch, f.start, current);
+}
+
+function DebtForm({ id, draft, setDraft, names }: { id: string; draft: Draft; setDraft: (d: Draft) => void; names: [string, string] }) {
+  const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
+  const fieldId = (name: string) => `debt-${id}-${name}`;
+  return <div className="debt-editor-fields">
+    <div><Label htmlFor={fieldId('name')}>Nome</Label><Input id={fieldId('name')} value={draft.name} onChange={e => set({ name: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('origin')}>Onde é a dívida</Label><Input id={fieldId('origin')} placeholder="Ex.: cartão do pai" value={draft.origin} onChange={e => set({ origin: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('owner')}>Responsável</Label><NativeSelect id={fieldId('owner')} value={draft.owner} onChange={e => set({ owner: e.target.value })}><option value="0">{names[0]}</option><option value="1">{names[1]}</option><option value="both">Os dois</option></NativeSelect></div>
+    <div><Label htmlFor={fieldId('amount')}>Valor da parcela (R$)</Label><Input id={fieldId('amount')} type="number" min="0" step="0.01" value={draft.amount} onChange={e => set({ amount: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('day')}>Vence no dia</Label><Input id={fieldId('day')} type="number" min="1" max="31" value={draft.day} onChange={e => set({ day: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('current')}>Esta parcela é a número</Label><Input id={fieldId('current')} type="number" min="1" step="1" value={draft.current} onChange={e => set({ current: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('start')}>e cai em</Label><Input id={fieldId('start')} type="month" value={draft.start} onChange={e => set({ start: e.target.value })} /></div>
+    <div><Label htmlFor={fieldId('count')}>Total de parcelas</Label><Input id={fieldId('count')} type="number" min="1" step="1" value={draft.count} onChange={e => set({ count: e.target.value })} /></div>
+  </div>;
+}
+
+const Fact = ({ label, children }: { label: string; children: React.ReactNode }) => <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{children}</dd></div>;
+
+function DebtCard({ d, month }: { d: Debt; month: string }) {
   const { s, update } = useAppState();
-  const change = (id: string, patch: Partial<Debt>, current?: number, refMonth: string = month) => update(st => ({ ...st, debts: st.debts.map(d => d.id === id ? editDebt(d, patch, refMonth, current) : d) }));
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const save = () => {
+    if (!draft) return;
+    const r = applyDraft(d, draft);
+    if (typeof r === 'string') { toast.error(r); return; }
+    update(st => ({ ...st, debts: st.debts.map(x => x.id === d.id ? r : x) }));
+    setDraft(null); toast.success('Dívida salva.');
+  };
+  const owner = d.shared ? 'Os dois' : s.names[d.person ?? 0];
+  return <article className="debt-editor-card" aria-label={d.name || 'Dívida'}>
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h2 className="text-lg">{d.name || 'Dívida'}{d.origin && <small className="ml-2 text-sm font-normal text-muted-foreground">{d.origin}</small>}</h2>
+      {!draft && <div className="flex gap-1"><Button variant="outline" size="sm" onClick={() => { setDraft(toDraft(d, month)); setConfirmRemove(false); }}><Pencil className="h-4 w-4" />Editar</Button><Button variant="ghost" size="icon" aria-label={`Remover ${d.name || 'dívida'}`} onClick={() => setConfirmRemove(true)}><Trash2 className="h-4 w-4" /></Button></div>}
+    </div>
+    {draft ? <>
+      <DebtForm id={d.id} draft={draft} setDraft={setDraft} names={s.names} />
+      <div className="mt-4 flex flex-wrap gap-2"><Button onClick={save}>Salvar</Button><Button variant="ghost" onClick={() => setDraft(null)}>Cancelar</Button></div>
+    </> : <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <Fact label="Responsável">{owner}</Fact>
+      <Fact label="Valor da parcela">{BRL(d.amount)}</Fact>
+      <Fact label="Vence no dia">{Number(d.firstDue.slice(8, 10))}</Fact>
+      <Fact label="Total de parcelas">{d.installments}</Fact>
+    </dl>}
+    {confirmRemove && !draft && <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm"><span>Remover {d.name || 'esta dívida'} de todos os meses? Isso não pode ser desfeito.</span><Button size="sm" variant="destructive" onClick={() => update(st => ({ ...st, debts: st.debts.filter(x => x.id !== d.id) }))}>Remover</Button><Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>Cancelar</Button></div>}
+    <p className="mt-4 border-t pt-3 text-sm text-muted-foreground" aria-live="polite">{debtSituation(d, month)}</p>
+  </article>;
+}
+
+function NewDebtCard({ month, onClose }: { month: string; onClose: () => void }) {
+  const { s, update } = useAppState();
+  const base = newDebt(month);
+  const [draft, setDraft] = useState<Draft>({ ...toDraft(base, month), amount: '' });
+  const save = () => {
+    const r = applyDraft(base, draft);
+    if (typeof r === 'string') { toast.error(r); return; }
+    update(st => ({ ...st, debts: [...st.debts, r] }));
+    toast.success('Dívida adicionada.'); onClose();
+  };
+  return <article className="debt-editor-card" aria-label="Nova dívida">
+    <h2 className="mb-4 text-lg">Nova dívida</h2>
+    <DebtForm id="new" draft={draft} setDraft={setDraft} names={s.names} />
+    <p className="mt-3 text-xs text-muted-foreground">Para uma dívida que começa no mês que vem, use parcela número 1 e escolha esse mês em "e cai em".</p>
+    <div className="mt-4 flex flex-wrap gap-2"><Button onClick={save}>Salvar</Button><Button variant="ghost" onClick={onClose}>Cancelar</Button></div>
+  </article>;
+}
+
+export function DebtEditor({ month }: { month: string }) {
+  const { s } = useAppState();
+  const [adding, setAdding] = useState(false);
   return <section aria-label="Cadastro de dívidas">
     <div id="debts" className="debt-editor-list">
-      {s.debts.map(d => {
-        const fieldId = (name: string) => `debt-${d.id}-${name}`;
-        return <article key={d.id} className="debt-editor-card" aria-label={d.name || 'Dívida'}>
-          <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg">{d.name || 'Dívida'}</h2><Button variant="ghost" size="icon" aria-label={`Remover ${d.name || 'dívida'}`} onClick={() => update(st => ({ ...st, debts: st.debts.filter(x => x.id !== d.id) }))}><Trash2 className="h-4 w-4" /></Button></div>
-          <div className="debt-editor-fields">
-            <div><Label htmlFor={fieldId('name')}>Nome</Label><Input id={fieldId('name')} value={d.name} onChange={e => change(d.id, { name: e.target.value })} /></div>
-            <div><Label htmlFor={fieldId('origin')}>Onde é a dívida</Label><Input id={fieldId('origin')} placeholder="Ex.: cartão do pai" value={d.origin ?? ''} onChange={e => change(d.id, { origin: e.target.value })} /></div>
-            <div><Label htmlFor={fieldId('owner')}>Responsável</Label><NativeSelect id={fieldId('owner')} value={d.shared ? 'both' : String(d.person ?? 0)} onChange={e => change(d.id, e.target.value === 'both' ? { shared: true, person: null } : { shared: false, person: Number(e.target.value) as Person })}><option value="0">{s.names[0]}</option><option value="1">{s.names[1]}</option><option value="both">Os dois</option></NativeSelect></div>
-            <div><Label htmlFor={fieldId('amount')}>Valor da parcela (R$)</Label><Input id={fieldId('amount')} type="number" min="0" step="0.01" value={d.amount / 100} onChange={e => { const amount = toCents(e.target.value); if (amount >= 0) change(d.id, { amount }); }} /></div>
-            <div><Label htmlFor={fieldId('day')}>Vence no dia</Label><Input id={fieldId('day')} type="number" min="1" max="31" value={Number(d.firstDue.slice(8, 10))} onChange={e => { const day = Number(e.target.value); if (Number.isInteger(day) && day >= 1 && day <= 31) change(d.id, { firstDue: `${d.firstDue.slice(0, 7)}-${String(day).padStart(2, '0')}` }); }} /></div>
-            <div><Label htmlFor={fieldId('current')}>Esta parcela é a número</Label><Input id={fieldId('current')} type="number" min="1" step="1" value={d.ref ?? debtCur(d, month)} onChange={e => change(d.id, {}, Number(e.target.value), d.ref_ym ?? month)} /></div>
-            <div><Label htmlFor={fieldId('start')}>e cai em</Label><Input id={fieldId('start')} type="month" value={d.ref_ym ?? month} onChange={e => { if (e.target.value) change(d.id, {}, d.ref ?? debtCur(d, month), e.target.value); }} /></div>
-            <div><Label htmlFor={fieldId('count')}>Total de parcelas</Label><Input id={fieldId('count')} type="number" min="1" step="1" value={d.installments} onChange={e => { const installments = Number(e.target.value); if (Number.isInteger(installments) && installments >= 1) change(d.id, { installments }); }} /></div>
-          </div>
-          <p className="mt-4 border-t pt-3 text-sm text-muted-foreground" aria-live="polite">{debtSituation(d, month)}</p>
-        </article>;
-      })}
-      {!s.debts.length && <Empty>Nenhuma dívida cadastrada.</Empty>}
+      {s.debts.map(d => <DebtCard key={d.id} d={d} month={month} />)}
+      {!s.debts.length && !adding && <Empty>Nenhuma dívida cadastrada.</Empty>}
+      {adding && <NewDebtCard month={month} onClose={() => setAdding(false)} />}
     </div>
-    <Button className="mt-4" variant="outline" onClick={() => update(st => ({ ...st, debts: [...st.debts, newDebt(month)] }))}><Plus className="h-4 w-4" />Adicionar dívida</Button>
+    {!adding && <Button className="mt-4" variant="outline" onClick={() => setAdding(true)}><Plus className="h-4 w-4" />Adicionar dívida</Button>}
   </section>;
 }

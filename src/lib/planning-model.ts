@@ -171,3 +171,25 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
   }
   return out;
 }
+
+export interface OwnerDebtTotal { key: 'a' | 'b' | 'both'; name: string; monthly: number; remaining: number; count: number }
+/** Debt totals for each person and for the couple (debts marked as shared). Remaining includes debts that have not started yet. */
+export function debtOwnerTotals(s: AppState, month: string): OwnerDebtTotal[] {
+  const monthly = summarize(s, month).items.filter(i => i.kind === 'debt');
+  const groups: OwnerDebtTotal[] = [
+    { key: 'a', name: s.names[0], monthly: 0, remaining: 0, count: 0 },
+    { key: 'b', name: s.names[1], monthly: 0, remaining: 0, count: 0 },
+    { key: 'both', name: 'Em conjunto', monthly: 0, remaining: 0, count: 0 },
+  ];
+  const pick = (shared: boolean, person: Person | null) => groups[shared || person === null ? 2 : person]!;
+  for (const d of s.debts) {
+    const g = pick(d.shared, d.person), bal = debtSummary(d);
+    g.remaining += bal.remaining;
+    if (!bal.done) g.count += 1;
+  }
+  for (const i of monthly) {
+    const d = s.debts.find(x => x.id === i.refId);
+    if (d) pick(d.shared, d.person).monthly += i.amount;
+  }
+  return groups;
+}

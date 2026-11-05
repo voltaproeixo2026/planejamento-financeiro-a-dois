@@ -1,18 +1,37 @@
 import { useState } from 'react';
 import { useAppState } from '@/lib/household';
-import { BRL, debtChanges, forecast, monthLabel } from '@/lib/finance';
-import { debtTotals } from '@/lib/planning-model';
+import { BRL, debtChanges, fmtDate, forecast, monthLabel, summarize } from '@/lib/finance';
+import { debtOwnerTotals, debtTotals } from '@/lib/planning-model';
 import { Button } from '@/components/ui/button';
 import { DebtEditor } from './DebtEditor';
+import { canToggle, togglePaid } from './Dashboard';
+import { Status } from './ui-bits';
 
 export function DebtScreen({ month }: { month: string }) {
-  const { s } = useAppState();
+  const { s, update } = useAppState();
   const [range, setRange] = useState(3);
   const totals = debtTotals(s, month);
+  const owners = debtOwnerTotals(s, month);
+  const installments = summarize(s, month).items.filter(i => i.kind === 'debt');
+  const today = new Date().toISOString().slice(0, 10);
   const rows = forecast(s, month, range);
   const changes = debtChanges(s, month, range);
   return <div className="debt-screen space-y-6">
     <section aria-label="Resumo das dívidas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div><div><dt>Falta pagar</dt><dd id="debt-left">{BRL(totals.remaining)}</dd></div></dl></section>
+    <section id="debt-owners" aria-label="Total de dívidas por pessoa">
+      <h2 className="mb-4 text-xl">Quanto cada um deve</h2>
+      <div className="grid gap-3 sm:grid-cols-3">{owners.map(o => <div key={o.key} className="rounded-xl border bg-card p-4">
+        <p className="text-sm text-muted-foreground">{o.name}</p>
+        <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner={o.key}>{BRL(o.remaining)}</p>
+        <p className="text-xs text-muted-foreground">falta pagar{o.count ? ` · ${o.count} ${o.count === 1 ? 'dívida' : 'dívidas'}` : ''}</p>
+        <p className="mt-2 text-sm">Parcelas neste mês: <b className="tabular-nums">{BRL(o.monthly)}</b></p>
+      </div>)}</div>
+      <p className="mt-2 text-sm text-muted-foreground">Total geral: <b>{BRL(owners.reduce((a, o) => a + o.remaining, 0))}</b>. Dívidas marcadas como "Os dois" ficam em conjunto.</p>
+    </section>
+    <section id="debt-month-list" aria-label="Parcelas do mês">
+      <h2 className="mb-2 text-xl">Parcelas de {monthLabel(month)}</h2>
+      {installments.length ? <ul className="divide-y">{installments.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Em conjunto' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b className="tabular-nums">{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} title={canToggle(s, i) ? undefined : 'As parcelas são pagas na ordem'} onClick={() => togglePaid(update, i, month)}>{i.paid ? 'Desfazer' : 'Pagar'}</Button></div></li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela neste mês.</p>}
+    </section>
     <section>
       <h2 className="mb-4 text-xl">Próximos meses</h2>
       <div id="fc-range" role="group" aria-label="Quantidade de meses" className="mb-4 flex gap-2">{[3, 6, 12].map(n => <Button key={n} variant={n === range ? 'default' : 'outline'} aria-pressed={n === range} onClick={() => setRange(n)}>{n} meses</Button>)}</div>
