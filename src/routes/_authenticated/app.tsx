@@ -6,9 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { HouseholdProvider, useHousehold } from "@/lib/household";
-import { exampleState, monthLabel, ym } from "@/lib/finance";
+import { monthLabel, ym } from "@/lib/finance";
 import { MonthNav } from "@/components/app/ui-bits";
 import { Dashboard } from "@/components/app/Dashboard";
 import { Accounts } from "@/components/app/Accounts";
@@ -66,15 +65,6 @@ function AppShell() {
           {h.members >= 2 && <span className="shell-sync"><span />Sincronizado</span>}
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" className="shell-ghost">Recomeçar</Button></AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Voltar aos valores de exemplo?</AlertDialogTitle>
-                  <AlertDialogDescription>Isso apaga o que vocês dois digitaram, nos dois celulares. Isso não pode ser desfeito.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Manter</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => { h.replace(exampleState()); toast.success("Exemplos restaurados."); }}>Voltar</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </div>
       </header>
