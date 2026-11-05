@@ -18,15 +18,14 @@ export function DebtScreen({ month }: { month: string }) {
   const changes = debtChanges(s, month, range);
   return <div className="debt-screen space-y-6">
     <section aria-label="Resumo das dívidas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div><div><dt>Falta pagar</dt><dd id="debt-left">{BRL(totals.remaining)}</dd></div></dl></section>
-    <section id="debt-owners" aria-label="Total de dívidas por pessoa">
-      <h2 className="mb-4 text-xl">Quanto cada um deve</h2>
+    <section id="debt-owners" aria-label="Parcelas do mês por pessoa">
+      <h2 className="mb-4 text-xl">Quanto cada um deve em {monthLabel(month)}</h2>
       <div className="grid gap-3 sm:grid-cols-3">{owners.map(o => <div key={o.key} className="rounded-xl border bg-card p-4">
         <p className="text-sm text-muted-foreground">{o.name}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner={o.key}>{BRL(o.remaining)}</p>
-        <p className="text-xs text-muted-foreground">falta pagar{o.count ? ` · ${o.count} ${o.count === 1 ? 'dívida' : 'dívidas'}` : ''}</p>
-        <p className="mt-2 text-sm">Parcelas neste mês: <b className="tabular-nums">{BRL(o.monthly)}</b></p>
+        <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner={o.key}>{BRL(o.monthly)}</p>
+        <p className="text-xs text-muted-foreground">em parcelas neste mês</p>
       </div>)}</div>
-      <p className="mt-2 text-sm text-muted-foreground">Total geral: <b>{BRL(owners.reduce((a, o) => a + o.remaining, 0))}</b>. Dívidas marcadas como "Os dois" ficam em conjunto.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Total do mês: <b>{BRL(owners.reduce((a, o) => a + o.monthly, 0))}</b>. Só as parcelas de {monthLabel(month)}. Dívidas marcadas como "Os dois" ficam em conjunto.</p>
     </section>
     <section id="debt-month-list" aria-label="Parcelas do mês">
       <h2 className="mb-2 text-xl">Parcelas de {monthLabel(month)}</h2>

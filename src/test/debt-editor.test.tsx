@@ -82,13 +82,15 @@ describe('Debt screen totals and installments', () => {
     s.debts = [mk('cartao', 'b', 10000), mk('carro', 'both', 20000), mk('notebook', 'a', 5000)];
     return s;
   };
-  it('totals each person and the couple', () => {
+  it('totals each person and the couple by the month installments only', () => {
     household.state = state();
     render(<DebtScreen month="2026-10" />);
     const total = (key: string) => document.querySelector(`[data-owner="${key}"]`)?.textContent;
-    expect(total('a')).toContain('200,00');
-    expect(total('b')).toContain('400,00');
-    expect(total('both')).toContain('800,00');
+    expect(total('a')).toContain('50,00'); // R$ 50 por mês, não os R$ 200 do total da dívida
+    expect(total('b')).toContain('100,00');
+    expect(total('both')).toContain('200,00');
+    expect(document.querySelector('#debt-owners')!.textContent).toMatch(/Total do mês: R\$\s350,00/);
+    expect(document.querySelector('#debt-owners')!.textContent).not.toContain('falta pagar');
   });
   it('lists the month installments and pays them from the debt screen', () => {
     household.state = state();
