@@ -29,6 +29,8 @@ export interface Debt {
   ref?: number;
   ref_ym?: string;
 }
+/** Money kept from earlier months that comes into the joint account in `month` (for example, to pay a late installment). */
+export interface Carry { id: string; desc: string; amount: number; month: string }
 export interface Transfer { id: string; person: Person; amount: number; date: string; month: string }
 
 export interface AppState {
@@ -44,6 +46,7 @@ export interface AppState {
   transfers: Transfer[];
   savedReal: number;
   isExample: boolean;
+  carry?: Carry[] | undefined;
 }
 
 export const BRL = (c: number) =>
@@ -207,12 +210,16 @@ export function splitAmount(total: number, pct0: number): [number, number] {
 }
 
 export interface MonthSummary {
+  carry: number;
   income: [number, number]; recurring: [number, number]; extras: [number, number];
   totalIncome: number; items: Item[]; paid: number; pending: number; overdue: Item[];
   sharedTotal: number; share: [number, number]; individual: [number, number];
   freeMoney: [number, number]; leftover: number; debtInstallments: number;
   transferred: [number, number]; needTransfer: [number, number];
 }
+
+/** Money from earlier months that enters in month m. */
+export const carryTotal = (s: Pick<AppState, 'carry'>, m: string) => (s.carry ?? []).filter((c) => c.month === m).reduce((a, c) => a + c.amount, 0);
 
 export function summarize(s: AppState, m: string, opts: { factor?: number | undefined; today?: string | undefined } = {}): MonthSummary {
   const factor = opts.factor ?? 1;
@@ -233,18 +240,19 @@ export function summarize(s: AppState, m: string, opts: { factor?: number | unde
   const weeks = weekdayDates(m, s.freeWeekday).length;
   const freeMoney: [number, number] = [s.weeklyFree[0] * weeks, s.weeklyFree[1] * weeks];
   const totalIncome = income[0] + income[1];
-  const leftover = totalIncome - (paid + pending) - freeMoney[0] - freeMoney[1];
+  const carry = carryTotal(s, m);
+  const leftover = totalIncome + carry - (paid + pending) - freeMoney[0] - freeMoney[1];
   const debtInstallments = items.filter((i) => i.kind === "debt").reduce((a, i) => a + i.amount, 0);
   const transferred: [number, number] = [0, 0];
   for (const t of s.transfers) if (t.month === m) transferred[t.person] += t.amount;
-  const cushion = s.cushion[m] ?? 0;
+  const cushion = (s.cushion[m] ?? 0) + carry;
   // Cushion in the joint account reduces what must be transferred, split by the same rule.
   const cushionShare = splitAmount(Math.min(cushion, sharedTotal), s.split[0]);
   const needTransfer: [number, number] = [
     Math.max(0, share[0] - cushionShare[0] - transferred[0]),
     Math.max(0, share[1] - cushionShare[1] - transferred[1]),
   ];
-  return { income, recurring, extras, totalIncome, items, paid, pending, overdue, sharedTotal, share, individual, freeMoney, leftover, debtInstallments, transferred, needTransfer };
+  return { carry, income, recurring, extras, totalIncome, items, paid, pending, overdue, sharedTotal, share, individual, freeMoney, leftover, debtInstallments, transferred, needTransfer };
 }
 
 /** Spreads each person's remaining need across their upcoming receipts, proportional to receipt size. */
@@ -282,7 +290,7 @@ export function jointCashflow(s: AppState, m: string, today = new Date().toISOSt
   for (const i of itemsForMonth(s, m).filter((i) => i.shared))
     moves.push({ date: i.date, desc: i.name, type: "saída", amount: i.amount, status: i.paid ? "realizado" : "previsto" });
   moves.sort((a, b) => a.date.localeCompare(b.date) || (a.type === "entrada" ? -1 : 1));
-  const start = s.cushion[m] ?? 0;
+  const start = (s.cushion[m] ?? 0) + carryTotal(s, m);
   let bal = start, current = start;
   const out: Move[] = moves.map((mv) => {
     bal += mv.type === "entrada" ? mv.amount : -mv.amount;

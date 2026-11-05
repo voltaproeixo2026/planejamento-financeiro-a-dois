@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { debtChanges, debtSummary, editDebt, emptyState, itemsForMonth, lastTimeBill, newDebt, repeatBill, setBillMonthValue, splitAmount, stopBillFrom, summarize, transferPlan, weekdayDates, type AppState, type Bill } from "./finance";
+import { carryTotal, debtChanges, debtSummary, editDebt, emptyState, itemsForMonth, jointCashflow, lastTimeBill, newDebt, repeatBill, setBillMonthValue, splitAmount, stopBillFrom, summarize, transferPlan, weekdayDates, type AppState, type Bill } from "./finance";
 
 const base = (): AppState => ({ ...emptyState(["Bianca", "Julio"]) });
 
@@ -120,5 +120,45 @@ describe("dívida que começa em outro mês", () => {
     expect(summarize(s, "2026-12").debtInstallments).toBe(40000);
     expect(debtChanges(s, "2026-10", 3)).toMatchObject([{ label: "Começa", month: "2026-11", amount: 40000 }]);
     expect(debtSummary(d).remaining).toBe(400000);
+  });
+});
+
+describe("dinheiro guardado de meses anteriores", () => {
+  const month = "2026-10";
+  const base2 = () => {
+    const s = emptyState(["Bianca", "Julio"]);
+    s.incomes = [{ id: "i", desc: "Salário", person: 0, amount: 300000, freq: "monthly", day: 5, active: true, autonomous: false }];
+    s.bills = [{ id: "agua", name: "Água", category: "Casa", amount: 10000, day: 8, person: null, shared: true, start: month, paid: {} }];
+    return s;
+  };
+  const late = (): Bill => ({ id: "fin", name: "Financiamento (setembro, atrasado)", category: "Dívidas", amount: 80000, day: 12, person: null, shared: true, start: month, end: month, paid: {} });
+
+  it("a parcela atrasada paga com o que foi guardado não reduz a sobra do mês", () => {
+    const s = base2();
+    const sobra = summarize(s, month).leftover;
+    s.bills.push(late());
+    expect(summarize(s, month).leftover).toBe(sobra - 80000);
+    s.carry = [{ id: "c", desc: "Guardado para o financiamento", amount: 80000, month }];
+    expect(summarize(s, month).leftover).toBe(sobra);
+    expect(summarize(s, month).totalIncome).toBe(300000); // não é renda
+  });
+
+  it("só vale no mês lançado e a conta avulsa não se repete", () => {
+    const s = base2();
+    s.bills.push(late());
+    s.carry = [{ id: "c", desc: "Guardado", amount: 80000, month }];
+    expect(carryTotal(s, "2026-11")).toBe(0);
+    expect(itemsForMonth(s, "2026-11").filter((i) => i.name.startsWith("Financiamento"))).toHaveLength(0);
+    expect(summarize(s, "2026-11").carry).toBe(0);
+  });
+
+  it("entra na conta conjunta no dia 1 e diminui o que cada um precisa transferir", () => {
+    const s = base2();
+    s.bills.push(late());
+    const sem = summarize(s, month);
+    s.carry = [{ id: "c", desc: "Guardado", amount: 80000, month }];
+    const com = summarize(s, month);
+    expect(jointCashflow(s, month).start).toBe(80000);
+    expect(com.needTransfer[0] + com.needTransfer[1]).toBe(sem.needTransfer[0] + sem.needTransfer[1] - 80000);
   });
 });

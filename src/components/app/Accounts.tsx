@@ -32,6 +32,7 @@ export function Accounts({ month }: { month: string }) {
       </Section>
       <Incomes month={month} />
       <Extras month={month} />
+      <Carries month={month} />
       <Bills month={month} />
     </div>
   );
@@ -110,6 +111,32 @@ function Extras({ month }: { month: string }) {
   );
 }
 
+function Carries({ month }: { month: string }) {
+  const { s, update } = useAppState();
+  const [f, setF] = useState({ desc: "", amount: "" });
+  const list = (s.carry ?? []).filter((c) => c.month === month);
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = toCents(f.amount);
+    if (!f.desc.trim() || amount <= 0) { toast.error("Informe a descrição e um valor maior que zero."); return; }
+    update((st) => ({ ...st, carry: [...(st.carry ?? []), { id: uid(), desc: f.desc.trim(), amount, month }] }));
+    setF({ desc: "", amount: "" }); toast.success("Dinheiro guardado lançado neste mês.");
+  };
+  return (
+    <Section title="Guardado de meses anteriores" desc={`Dinheiro que sobrou antes e entra em ${monthLabel(month)} (por exemplo, para pagar uma parcela atrasada). Não é renda: soma na sobra e entra na conta conjunta no dia 1. Lance a conta que ele vai pagar em Contas fixas, com "Só neste mês".`}>
+      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3">
+        <F label="Descrição"><Input value={f.desc} onChange={(e) => setF({ ...f, desc: e.target.value })} placeholder="Guardado para o financiamento" /></F>
+        <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
+        <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
+      </form>
+      {list.length ? <ul className="divide-y">{list.map((c) => (
+        <li key={c.id} className="flex items-center justify-between py-3"><p className="font-medium">{c.desc}</p>
+          <div className="flex items-center gap-2"><b>{BRL(c.amount)}</b><Button size="icon" variant="ghost" aria-label="Remover" onClick={() => update((st) => ({ ...st, carry: (st.carry ?? []).filter((x) => x.id !== c.id) }))}><Trash2 className="h-4 w-4" /></Button></div></li>
+      ))}</ul> : <Empty>Nada guardado entrando neste mês.</Empty>}
+    </Section>
+  );
+}
+
 function BillValue({ id, cents, onCommit }: { id: string; cents: number; onCommit: (cents: number) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
@@ -131,7 +158,7 @@ type Pending = { id: string; kind: "stop" | "delete" } | null;
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
-  const [f, setF] = useState({ name: "", category: "", amount: "", day: "10", person: "" });
+  const [f, setF] = useState({ name: "", category: "", amount: "", day: "10", person: "", once: false });
   const [dup, setDup] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
@@ -140,8 +167,8 @@ function Bills({ month }: { month: string }) {
 
   const create = () => {
     const amount = toCents(f.amount), day = Number(f.day);
-    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: month, paid: {} }] }));
-    setF({ ...f, name: "", amount: "" }); setDup(false); toast.success(`Conta adicionada em ${monthLabel(month)}. Ela se repete nos meses seguintes.`);
+    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: month, ...(f.once ? { end: month } : {}), paid: {} }] }));
+    setF({ ...f, name: "", amount: "" }); setDup(false); toast.success(f.once ? `Conta lançada só em ${monthLabel(month)}.` : `Conta adicionada em ${monthLabel(month)}. Ela se repete nos meses seguintes.`);
   };
   const add = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,13 +192,14 @@ function Bills({ month }: { month: string }) {
   return (
     <Section title="Contas fixas" desc={`Mostrando ${monthLabel(month)}. Toda conta se repete nos meses seguintes com o último valor, e você muda o valor só do mês em que ele mudar.`}
       action={items.length ? <Button size="sm" variant="outline" onClick={repeatAll}>Repetir todas em {monthLabel(next)}</Button> : undefined}>
-      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-8">
         <F label="Nome"><Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDup(false); }} /></F>
         <F label="Categoria"><Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} /></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
         <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
         <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
         <F label="Começa em"><Input readOnly value={monthLabel(month)} className="capitalize" aria-label="Mês de início" /></F>
+        <F label="Repete?"><NativeSelect aria-label="Repete?" value={f.once ? "once" : "always"} onChange={(e) => setF({ ...f, once: e.target.value === "once" })}><option value="always">Todo mês</option><option value="once">Só neste mês</option></NativeSelect></F>
         <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
       </form>
       {dup && <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm">

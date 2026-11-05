@@ -1,4 +1,4 @@
-import { addMonths, BRL, daysIn, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
+import { addMonths, BRL, carryTotal, daysIn, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -155,7 +155,7 @@ export function flowDays(s: AppState, month: string) {
     balance += inflow - outflow;
     days.push({ day: d, balance, moves, inflow, outflow });
   }
-  return { start: cf.start, days, minBalance: cf.minBalance, needed: cf.start + Math.max(0, -cf.minBalance) };
+  return { start: cf.start, carry: carryTotal(s, month), days, minBalance: cf.minBalance, needed: (s.cushion[month] ?? 0) + Math.max(0, -cf.minBalance) };
 }
 
 /** Round axis values: step chosen among 1, 2, 2.5, 5 and 10 times a power of ten. */

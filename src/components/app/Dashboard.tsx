@@ -5,6 +5,7 @@ import { addMonths, alerts, BRL, fmtDate, monthLabel, summarize, type AppState, 
 import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { IncomeScenario } from './IncomeScenario';
+import { Report } from './Report';
 
 export function togglePaid(update: ReturnType<typeof useAppState>['update'], i: Item, month: string) {
   update((s) => {
@@ -64,5 +65,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
       <div className="mt-4 flex flex-wrap justify-between gap-2 border-t pt-4"><span>Falta pagar no total</span><b>{BRL(totals.remaining)}</b></div>
     </Section>
     <Section title="Pontos de atenção"><ul id="alerts" className="space-y-2">{attention.length ? attention.map((a, k) => <li key={k} className="flex gap-2 rounded-lg bg-muted p-3 text-sm">{a.level === 'danger' ? <OctagonAlert className="h-4 w-4 shrink-0 text-destructive" /> : a.level === 'warn' ? <AlertTriangle className="h-4 w-4 shrink-0 text-warning" /> : <Info className="h-4 w-4 shrink-0 text-primary" />}{a.text}</li>) : <li><Empty>Tudo tranquilo por aqui.</Empty></li>}</ul></Section>
+    <Report month={month} />
   </div>;
 }

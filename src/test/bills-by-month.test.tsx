@@ -63,4 +63,26 @@ describe('Contas fixas por mês', () => {
     expect(billsOf('2026-10')).toHaveLength(1);
     expect(billsOf('2026-11')).toHaveLength(0);
   });
+
+  it('conta "Só neste mês" não se repete e o guardado de meses anteriores é lançado no mês', () => {
+    household.state = emptyState(['Bianca', 'Julio']);
+    render(<Accounts month="2026-10" />);
+    const form = screen.getByLabelText('Mês de início').closest('form')!;
+    const [name, , amount] = Array.from(form.querySelectorAll('input'));
+    fireEvent.change(name!, { target: { value: 'Financiamento (setembro)' } });
+    fireEvent.change(amount!, { target: { value: '800' } });
+    fireEvent.change(screen.getByLabelText('Repete?'), { target: { value: 'once' } });
+    fireEvent.submit(form);
+    expect(household.state.bills[0]).toMatchObject({ start: '2026-10', end: '2026-10', amount: 80000 });
+    expect(billsOf('2026-11')).toHaveLength(0);
+    cleanup();
+    render(<Accounts month="2026-10" />);
+    const carryForm = screen.getByPlaceholderText('Guardado para o financiamento').closest('form')!;
+    const [desc, value] = Array.from(carryForm.querySelectorAll('input'));
+    fireEvent.change(desc!, { target: { value: 'Guardado de setembro' } });
+    fireEvent.change(value!, { target: { value: '800' } });
+    fireEvent.submit(carryForm);
+    expect(household.state.carry).toMatchObject([{ desc: 'Guardado de setembro', amount: 80000, month: '2026-10' }]);
+  });
 });
+

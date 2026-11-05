@@ -35,6 +35,7 @@ export function Cashflow({ month }: { month: string }) {
     <Section title="Colchão para começar o mês"><div className="max-w-md space-y-2"><Label htmlFor="cushion">Saldo na conta conjunta no dia 1 (R$)</Label><Input id="cushion" type="number" step="0.01" value={(s.cushion[month] ?? 0) / 100} onChange={e => update(st => ({ ...st, cushion: { ...st.cushion, [month]: toCents(e.target.value) } }))} />
       <p id="buffer" className="text-sm text-muted-foreground">{fd.needed <= 0 ? 'Com as entradas e saídas previstas, a conta não fica negativa.' : <>Para a conta nunca ficar negativa neste mês, o saldo do dia 1 precisa ser de pelo menos <b className="text-foreground">{BRL(fd.needed)}</b>.</>}</p>
       {(s.cushion[month] ?? 0) < fd.needed && <Button type="button" variant="outline" size="sm" onClick={() => update(st => ({ ...st, cushion: { ...st.cushion, [month]: fd.needed } }))}>Usar esse valor</Button>}
+      {fd.carry > 0 && <p className="text-sm">Mais <b>{BRL(fd.carry)}</b> guardados de meses anteriores entram no dia 1 (cadastro em Contas).</p>}
       <p className="text-xs text-muted-foreground">Os dias e a conta semanal seguem o calendário real do mês.</p></div></Section>
   </div>;
 }
