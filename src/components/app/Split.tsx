@@ -9,13 +9,14 @@ export function Split({ month }: { month: string }) {
   const { s, update } = useAppState();
   const view = divisionView(s, month);
   const rows = payerRows(s, month);
+  const own = rows.filter(row => row.mode !== 'default').length;
   const methods: { id: DivisionMethod; label: string }[] = [
     { id: 'prop', label: 'Pela renda' }, { id: 'half', label: 'Meio a meio' }, { id: 'custom', label: 'Escolher' },
   ];
 
   return (
     <div className="division-screen" id="tab-divisao">
-      <section className="card">
+      <section className="card wide">
         <h2>Como dividir as contas</h2>
         <div className="seg" id="method" role="group" aria-label="Forma de dividir">
           {methods.map(method => <Button key={method.id} variant="ghost" type="button" data-m={method.id}
@@ -28,13 +29,41 @@ export function Split({ month }: { month: string }) {
         </div>
         <p className="small" id="method-note">{view.note}</p>
       </section>
-      <section className="card wide" id="payers">
-        <h2>Quem paga cada conta</h2>
-        <p className="small section-caption">Escolha quem paga cada conta e cada parcela. Em "Personalizado" a conta é dividida em porcentagens e cada um paga a sua parte direto, sem passar pela conta conjunta. Vale para todos os meses dessa conta.</p>
-        {rows.length ? <ul className="payer-list">{rows.map(row => <li key={row.key} className="payer-row">
-          <div className="payer-name"><b>{row.name}</b><span className="small"> {BRL(row.amount)}</span></div>
+      <div className="people wide">{view.people.map(person => <section className="card person" id={person.person === 0 ? 'person-a' : 'person-b'} key={person.person}>
+        <h2>{person.name}</h2>
+        <p className="num">{BRL(person.accounts)}</p>
+        <p className="small">paga {person.percent}% das contas</p>
+        <div className={`meter${person.hot ? ' hot' : ''}`} role="img" aria-label={`Renda comprometida de ${person.name}: ${person.usedPercent}%`}>
+          <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 10" aria-hidden="true"><rect width={person.meterPercent} height="10" /></svg>
+        </div>
+        <p className="small meter-caption">{person.usedPercent}% da renda</p>
+        <p className={`left${person.savings < 0 ? ' neg' : ''}`}><span className="small">Sobra</span><b>{BRL(person.savings)}</b></p>
+        <details className="more"><summary>Ver detalhes</summary>
+          <dl className="kv"><dt>Renda no mês</dt><dd>{BRL(person.income)}</dd><dt>Dinheiro livre no mês</dt><dd>{BRL(person.freeMoney)}</dd></dl>
+        </details>
+      </section>)}</div>
+      <section className="card wide">
+        <h2>Quanto transferir em cada recebimento</h2>
+        <ul className="plan" id="plan">{view.events.length ? view.events.map((event, index) => <li key={`${event.who}-${event.date}-${index}`}>
+          <span className="d">Dia {event.day}</span><span>{s.names[event.who]}<span className="small receipt-label">{event.label}</span></span><span className="v">{BRL(event.amount)}</span>
+        </li>) : <li className="small">Cadastre as rendas na aba Contas.</li>}</ul>
+      </section>
+      <section className="card wide">
+        <h2>Dinheiro livre por semana</h2>
+        <div className="grid2">{view.people.map(person => <label className="fld" key={person.person}>
+          <span id={person.person === 0 ? 'wk-a-l' : 'wk-b-l'}>{person.name}</span><div className="money">
+            <Input className="in" id={person.person === 0 ? 'wk-a' : 'wk-b'} type="number" inputMode="decimal" min="0" step="5"
+              value={person.weekly} onChange={event => update(st => divisionWeekly(st, person.person, toCents(event.target.value)))} />
+          </div></label>)}</div>
+        <p className="small section-caption">Fica com cada um e não entra na divisão das contas.</p>
+      </section>
+      <details className="card wide payers" id="payers">
+        <summary><span>Quem paga cada conta</span><span className="small">{own ? `${own} com divisão própria` : 'todas pelo método acima'}</span></summary>
+        <p className="small section-caption">Em "Personalizado" cada um paga a sua parte direto, fora da conta conjunta. Vale para todos os meses da conta.</p>
+        {rows.length ? <ul className="payer-list">{rows.map(row => <li key={row.key} className={`payer-row${row.mode === 'default' ? '' : ' own'}`}>
+          <div className="payer-name"><b>{row.name}</b><span className="small">{BRL(row.amount)}</span></div>
           <NativeSelect aria-label={`Quem paga ${row.name}`} value={row.mode} onChange={event => update(st => setItemPayer(st, row, event.target.value as PayerMode, row.pctA))}>
-            <option value="default">Os dois (pelo método acima)</option><option value="a">Só {s.names[0]}</option><option value="b">Só {s.names[1]}</option><option value="custom">Personalizado</option>
+            <option value="default">Os dois</option><option value="a">Só {s.names[0]}</option><option value="b">Só {s.names[1]}</option><option value="custom">Personalizado</option>
           </NativeSelect>
           {row.mode === 'custom' && <div className="payer-custom">
             <label className="small" htmlFor={`pct-${row.key}`}>Parte de {s.names[0]} (%)</label>
@@ -43,31 +72,7 @@ export function Split({ month }: { month: string }) {
             <span className="small">{s.names[0]} {BRL(row.partA)} · {s.names[1]} {BRL(row.partB)}</span>
           </div>}
         </li>)}</ul> : <p className="small">Nenhuma conta ou parcela neste mês.</p>}
-      </section>
-      {view.people.map(person => <section className="card person" id={person.person === 0 ? 'person-a' : 'person-b'} key={person.person}>
-        <header><h2>{person.name}</h2><span className="small">paga {person.percent}% das contas</span></header>
-        <p className="num">{BRL(person.accounts)}<span className="small account-caption"> por mês nas contas</span></p>
-        <div><div className={`meter${person.hot ? ' hot' : ''}`} role="img" aria-label={`Renda comprometida de ${person.name}: ${person.usedPercent}%`}>
-          <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 10" aria-hidden="true"><rect width={person.meterPercent} height="10" /></svg>
-        </div><p className="small meter-caption">Contas e dinheiro livre usam {person.usedPercent}% da renda.</p></div>
-        <dl className="kv"><dt>Renda no mês</dt><dd>{BRL(person.income)}</dd><dt>Dinheiro livre no mês</dt><dd>{BRL(person.freeMoney)}</dd><dt>Sobra para poupar</dt><dd>{BRL(person.savings)}</dd></dl>
-      </section>)}
-      <section className="card">
-        <h2>Dinheiro livre por semana</h2>
-        <p className="small section-caption">Fica na conta de cada um e não entra na divisão das contas.</p>
-        <div className="grid2">{view.people.map(person => <label className="fld" key={person.person}>
-          <span id={person.person === 0 ? 'wk-a-l' : 'wk-b-l'}>{person.name}</span><div className="money">
-            <Input className="in" id={person.person === 0 ? 'wk-a' : 'wk-b'} type="number" inputMode="decimal" min="0" step="5"
-              value={person.weekly} onChange={event => update(st => divisionWeekly(st, person.person, toCents(event.target.value)))} />
-          </div></label>)}</div>
-      </section>
-      <section className="card wide">
-        <h2>Quanto transferir em cada recebimento</h2>
-        <p className="small section-caption">Para a conta conjunta, no dia em que o dinheiro cai.</p>
-        <ul className="plan" id="plan">{view.events.length ? view.events.map((event, index) => <li key={`${event.who}-${event.date}-${index}`}>
-          <span className="d">Dia {event.day}</span><span>{s.names[event.who]}<span className="small receipt-label">{event.label}</span></span><span className="v">{BRL(event.amount)}</span>
-        </li>) : <li className="small">Cadastre as rendas na aba Contas.</li>}</ul>
-      </section>
+      </details>
     </div>
   );
 }

@@ -235,4 +235,29 @@
 .division-screen .payer-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(180px,240px); gap: 8px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .division-screen .payer-custom { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .division-screen .payer-custom .in { width: 90px; }
-@media (max-width: 560px) { .division-screen .payer-row { grid-template-columns: minmax(0,1fr); } }
+
+/* Divisão: leitura mais leve */
+.division-screen .people { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.division-screen .people .card { margin-bottom: 0; padding: 14px; gap: 6px; }
+.division-screen .person h2 { font-size: 15px; color: var(--ink2); font-weight: 600; margin: 0; }
+.division-screen .person .num { font-size: 22px; line-height: 1.15; }
+.division-screen .person .meter-caption { margin-top: 2px; font-size: 12px; }
+.division-screen .person .left { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.division-screen .person .left.neg b { color: var(--bad); }
+.division-screen .more { font-size: 13px; color: var(--ink2); }
+.division-screen .more summary, .division-screen .payers summary { cursor: pointer; }
+.division-screen .more .kv { margin-top: 8px; font-size: 13px; }
+.division-screen .plan { margin-top: 4px; }
+.division-screen .payers summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; font-size: 17px; font-weight: 600; list-style: none; }
+.division-screen .payers summary::-webkit-details-marker { display: none; }
+.division-screen .payers summary::after { content: "▾"; margin-left: auto; color: var(--reference-muted); }
+.division-screen .payers[open] summary::after { content: "▴"; }
+.division-screen .payers .section-caption { margin: 10px 0 0; }
+.division-screen .payer-list { margin: 8px 0 0; padding: 0; list-style: none; display: block; }
+.division-screen .payer-row { grid-template-columns: minmax(0,1fr) 150px; padding: 8px 0; }
+.division-screen .payer-row.own .payer-name b { color: var(--accent); }
+.division-screen .payer-name { display: grid; gap: 1px; }
+.division-screen .payer-row select { height: 34px; font-size: 13px; }
+@media (max-width: 380px) { .division-screen .people { grid-template-columns: minmax(0,1fr); } }
+@media (min-width: 900px) { .division-screen .people { gap: 16px; } .division-screen .people .card { padding: 18px; } .division-screen .person .num { font-size: 26px; } }
+@media (min-width: 900px) { .division-screen .people { margin-bottom: 0; } }
