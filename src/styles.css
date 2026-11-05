@@ -230,3 +230,9 @@
   .household-tabbar button { display: flex; align-items: center; justify-content: flex-start; gap: 12px; font-size: 14px; padding: 11px 12px; }
   .household-tabbar button[aria-current="page"] { background: var(--accent-soft); }
 }
+
+.division-screen .payer-list { display: grid; gap: 10px; margin-top: 12px; }
+.division-screen .payer-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(180px,240px); gap: 8px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.division-screen .payer-custom { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.division-screen .payer-custom .in { width: 90px; }
+@media (max-width: 560px) { .division-screen .payer-row { grid-template-columns: minmax(0,1fr); } }

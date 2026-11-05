@@ -1,7 +1,7 @@
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
-import { addMonths, alerts, BRL, fmtDate, monthLabel, summarize, type AppState, type Item } from '@/lib/finance';
+import { addMonths, alerts, BRL, fmtDate, monthLabel, payerLabel, summarize, type AppState, type Item } from '@/lib/finance';
 import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { Report } from './Report';
@@ -45,10 +45,10 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
         {[{ label: 'Entra no mês', value: sum.totalIncome }, { label: 'Já saiu', value: sum.paid }, { label: 'Falta pagar', value: sum.pending }, { label: 'Sobra prevista', value: sum.leftover }].map(x => <div key={x.label}><dt className="text-sm text-muted-foreground">{x.label}</dt><dd className="mt-1 text-2xl font-semibold">{BRL(x.value)}</dd></div>)}
       </dl>
       <h2 className="text-lg">Próximos vencimentos</h2>
-      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Compartilhada' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
+      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
       <div id="paid-list" className="mt-6 border-t pt-4">
         <h2 className="text-lg">Já pagas neste mês</h2>
-        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {i.shared ? 'Compartilhada' : s.names[i.person ?? 0]}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
+        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
       </div>
     </section>
     <Section id="next-card" title="Previsão do próximo mês">

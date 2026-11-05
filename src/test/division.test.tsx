@@ -32,4 +32,19 @@ describe('Division interaction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Meio a meio' }));
     expect(household.state.split).toEqual([50, 50]);
   });
+
+  it('lets each bill have its own payer, including a custom percentage with both parts shown', () => {
+    household.state = emptyState(['Bianca', 'Julio']);
+    household.state.bills = [{ id: 'card', name: 'Cartão', category: 'Dívidas', amount: 100000, day: 10, shared: true, person: null, start: '2026-10', paid: {} }];
+    render(<Split month="2026-10" />);
+    fireEvent.change(screen.getByLabelText('Quem paga Cartão'), { target: { value: 'custom' } });
+    expect(household.state.bills[0]).toMatchObject({ splitA: 50, shared: false });
+    fireEvent.change(screen.getByLabelText('Parte de Bianca (%)'), { target: { value: '30' } });
+    expect(household.state.bills[0]?.splitA).toBe(30);
+    expect(document.querySelector('.payer-custom')?.textContent).toMatch(/Bianca R\$\s300,00 · Julio R\$\s700,00/);
+    expect(document.querySelector('#person-a')?.textContent).toContain('30% das contas');
+    fireEvent.change(screen.getByLabelText('Quem paga Cartão'), { target: { value: 'b' } });
+    expect(household.state.bills[0]).toMatchObject({ shared: false, person: 1, splitA: undefined });
+  });
 });
+

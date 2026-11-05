@@ -1,4 +1,4 @@
-import { BRL, debtCur, debtSummary, fmtDate, incomeReceipts, monthLabel, summarize, type AppState } from './finance';
+import { BRL, debtCur, debtSummary, fmtDate, incomeReceipts, monthLabel, payerLabel, summarize, type AppState } from './finance';
 
 export interface ReportLine { date: string; desc: string; who: string; amount: number; status?: 'pago' | 'pendente' }
 export interface DebtLine { name: string; owner: string; situation: string; remaining: number }
@@ -11,19 +11,18 @@ export interface MonthReport {
 /** Everything that came in and went out in a month, built from the same calculations the screens use. */
 export function monthReport(s: AppState, month: string, today = new Date().toISOString().slice(0, 10)): MonthReport {
   const sum = summarize(s, month, { today });
-  const who = (person: number | null, shared: boolean) => (shared || person === null ? 'Casal' : s.names[person as 0 | 1]);
   const entradas: ReportLine[] = [
     ...s.incomes.flatMap((i) => incomeReceipts(i, month).map((r) => ({ date: r.date, desc: i.desc, who: s.names[i.person], amount: r.amount }))),
     ...s.extras.filter((e) => e.month === month).map((e) => ({ date: e.date, desc: `Extra: ${e.desc}`, who: s.names[e.person], amount: e.amount })),
     ...(s.carry ?? []).filter((c) => c.month === month).map((c) => ({ date: `${month}-01`, desc: `Guardado de meses anteriores: ${c.desc}`, who: 'Casal', amount: c.amount })),
   ].sort((a, b) => a.date.localeCompare(b.date));
-  const toLine = (i: (typeof sum.items)[number]): ReportLine => ({ date: i.date, desc: i.name, who: who(i.person, i.shared), amount: i.amount, status: i.paid ? 'pago' : 'pendente' });
+  const toLine = (i: (typeof sum.items)[number]): ReportLine => ({ date: i.date, desc: i.name, who: payerLabel(s.names, i, 'Casal'), amount: i.amount, status: i.paid ? 'pago' : 'pendente' });
   const contas = sum.items.filter((i) => i.kind === 'bill').map(toLine);
   const dividas = sum.items.filter((i) => i.kind === 'debt').map(toLine);
   const debtsNow: DebtLine[] = s.debts.map((d) => {
     const cur = debtCur(d, month), bal = debtSummary(d);
     const situation = bal.done ? 'Quitada' : cur < 1 ? `Começa em ${monthLabel(d.firstDue.slice(0, 7))}` : cur > d.installments ? 'Parcelas encerradas' : `Parcela ${cur} de ${d.installments}`;
-    return { name: d.origin ? `${d.name} (${d.origin})` : d.name, owner: who(d.person, d.shared), situation, remaining: bal.remaining };
+    return { name: d.origin ? `${d.name} (${d.origin})` : d.name, owner: payerLabel(s.names, d, 'Casal'), situation, remaining: bal.remaining };
   });
   const sumOf = (l: ReportLine[], status?: string) => l.filter((x) => !status || x.status === status).reduce((a, x) => a + x.amount, 0);
   return {

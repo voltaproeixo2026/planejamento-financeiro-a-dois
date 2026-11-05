@@ -1,4 +1,4 @@
-import { addMonths, BRL, carryTotal, daysIn, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
+import { addMonths, BRL, carryTotal, clampPct, daysIn, payerLabel, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, splitAmount, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -56,7 +56,7 @@ export function debtHomeView(s: AppState, month: string) {
     const status = balance.done || month > addMonths(d.firstDue.slice(0, 7), d.installments - 1) ? 'done' : installment ? 'active' : 'future';
     return {
       id: d.id, name: d.name, origin: d.origin,
-      owner: d.shared ? 'Os dois' : s.names[d.person ?? 0],
+      owner: payerLabel(s.names, d, 'Os dois'),
       current: installment ? installment.index + 1 : null,
       installments: d.installments, left: balance.left, remaining: balance.remaining,
       total: d.amount * d.installments,
@@ -108,7 +108,7 @@ export function divisionView(s: AppState, month: string) {
     half: 'Cada um paga metade das contas. Funciona bem quando as rendas são parecidas. Aqui, quem ganha menos sente mais.',
     custom: 'Você escolhe a parte de cada um. Use quando um dos dois já paga algo por fora.',
   };
-  const individualDebt = sum.items.some(item => item.kind === 'debt' && !item.shared && item.person !== null);
+  const individualDebt = sum.items.some(item => item.kind === 'debt' && !item.shared);
   const events = transferPlan(s, month, `${month}-01`).map(event => ({
     ...event, who: event.person, day: Number(event.date.slice(8, 10)),
     label: event.reason.match(/ao receber "(.*)"\./)?.[1] ?? 'Transferência pendente',
@@ -182,14 +182,43 @@ export function debtOwnerTotals(s: AppState, month: string): OwnerDebtTotal[] {
     { key: 'both', name: 'Em conjunto', monthly: 0, remaining: 0, count: 0 },
   ];
   const pick = (shared: boolean, person: Person | null) => groups[shared || person === null ? 2 : person]!;
+  const add = (d: Debt, field: 'monthly' | 'remaining', amount: number) => {
+    if (d.splitA !== undefined) { const [a, b] = splitAmount(amount, clampPct(d.splitA)); groups[0]![field] += a; groups[1]![field] += b; }
+    else pick(d.shared, d.person)[field] += amount;
+  };
   for (const d of s.debts) {
-    const g = pick(d.shared, d.person), bal = debtSummary(d);
-    g.remaining += bal.remaining;
-    if (!bal.done) g.count += 1;
+    const bal = debtSummary(d);
+    add(d, 'remaining', bal.remaining);
+    if (!bal.done) { if (d.splitA !== undefined) { groups[0]!.count += 1; groups[1]!.count += 1; } else pick(d.shared, d.person).count += 1; }
   }
   for (const i of monthly) {
     const d = s.debts.find(x => x.id === i.refId);
-    if (d) pick(d.shared, d.person).monthly += i.amount;
+    if (d) add(d, 'monthly', i.amount);
   }
   return groups;
+}
+
+export type PayerMode = 'default' | 'a' | 'b' | 'custom';
+export const payerModeOf = (x: { shared: boolean; person: Person | null; splitA?: number | undefined }): PayerMode =>
+  x.splitA !== undefined ? 'custom' : x.shared || x.person === null ? 'default' : x.person === 0 ? 'a' : 'b';
+/** Sets who pays a bill or debt: both by the chosen method, one person, or an own percentage. Applies to every month of that bill/debt. */
+export function setItemPayer(s: AppState, item: { kind: 'bill' | 'debt'; refId: string }, mode: PayerMode, pct = 50): AppState {
+  const patch = mode === 'custom' ? { shared: false, person: null, splitA: clampPct(pct) }
+    : mode === 'default' ? { shared: true, person: null, splitA: undefined }
+    : { shared: false, person: (mode === 'a' ? 0 : 1) as Person, splitA: undefined };
+  return item.kind === 'bill'
+    ? { ...s, bills: s.bills.map(b => b.id === item.refId ? { ...b, ...patch } : b) }
+    : { ...s, debts: s.debts.map(d => d.id === item.refId ? { ...d, ...patch } : d) };
+}
+
+export interface PayerRow { key: string; kind: 'bill' | 'debt'; refId: string; name: string; amount: number; mode: PayerMode; pctA: number; partA: number; partB: number }
+/** This month's bills and debt installments with who pays each one. */
+export function payerRows(s: AppState, month: string): PayerRow[] {
+  return summarize(s, month).items.map(i => {
+    const raw = i.kind === 'bill' ? s.bills.find(b => b.id === i.refId) : s.debts.find(d => d.id === i.refId);
+    const mode = raw ? payerModeOf(raw) : 'default';
+    const pctA = clampPct(raw?.splitA ?? 50);
+    const [partA, partB] = splitAmount(i.amount, pctA);
+    return { key: i.key, kind: i.kind, refId: i.refId, name: i.name, amount: i.amount, mode, pctA, partA, partB };
+  });
 }

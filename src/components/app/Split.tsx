@@ -2,11 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAppState } from "@/lib/household";
 import { BRL, toCents } from "@/lib/finance";
-import { divisionChoice, divisionControl, divisionView, divisionWeekly, type DivisionMethod } from "@/lib/planning-model";
+import { divisionChoice, divisionControl, divisionView, divisionWeekly, payerRows, setItemPayer, type DivisionMethod, type PayerMode } from "@/lib/planning-model";
+import { NativeSelect } from "./ui-bits";
 
 export function Split({ month }: { month: string }) {
   const { s, update } = useAppState();
   const view = divisionView(s, month);
+  const rows = payerRows(s, month);
   const methods: { id: DivisionMethod; label: string }[] = [
     { id: 'prop', label: 'Pela renda' }, { id: 'half', label: 'Meio a meio' }, { id: 'custom', label: 'Escolher' },
   ];
@@ -25,6 +27,22 @@ export function Split({ month }: { month: string }) {
             onChange={event => update(st => divisionChoice(st, month, 'custom', Number(event.target.value)))} />
         </div>
         <p className="small" id="method-note">{view.note}</p>
+      </section>
+      <section className="card wide" id="payers">
+        <h2>Quem paga cada conta</h2>
+        <p className="small section-caption">Escolha quem paga cada conta e cada parcela. Em "Personalizado" a conta é dividida em porcentagens e cada um paga a sua parte direto, sem passar pela conta conjunta. Vale para todos os meses dessa conta.</p>
+        {rows.length ? <ul className="payer-list">{rows.map(row => <li key={row.key} className="payer-row">
+          <div className="payer-name"><b>{row.name}</b><span className="small"> {BRL(row.amount)}</span></div>
+          <NativeSelect aria-label={`Quem paga ${row.name}`} value={row.mode} onChange={event => update(st => setItemPayer(st, row, event.target.value as PayerMode, row.pctA))}>
+            <option value="default">Os dois (pelo método acima)</option><option value="a">Só {s.names[0]}</option><option value="b">Só {s.names[1]}</option><option value="custom">Personalizado</option>
+          </NativeSelect>
+          {row.mode === 'custom' && <div className="payer-custom">
+            <label className="small" htmlFor={`pct-${row.key}`}>Parte de {s.names[0]} (%)</label>
+            <Input id={`pct-${row.key}`} className="in" type="number" inputMode="numeric" min="0" max="100" step="1" value={row.pctA}
+              onChange={event => update(st => setItemPayer(st, row, 'custom', Number(event.target.value)))} />
+            <span className="small">{s.names[0]} {BRL(row.partA)} · {s.names[1]} {BRL(row.partB)}</span>
+          </div>}
+        </li>)}</ul> : <p className="small">Nenhuma conta ou parcela neste mês.</p>}
       </section>
       {view.people.map(person => <section className="card person" id={person.person === 0 ? 'person-a' : 'person-b'} key={person.person}>
         <header><h2>{person.name}</h2><span className="small">paga {person.percent}% das contas</span></header>

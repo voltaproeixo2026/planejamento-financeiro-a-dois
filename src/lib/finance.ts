@@ -20,12 +20,16 @@ export interface Bill {
   paid: Record<string, boolean>; // month -> paid
   /** Optional value changes by month ("YYYY-MM" -> cents). A value holds from that month on, until the next change. */
   values?: Record<string, number> | undefined;
+  /** Own split: percent of this bill paid by the first person (0-100); the rest is the second person's. Each pays their part directly. */
+  splitA?: number | undefined;
 }
 export interface Debt {
   id: string; name: string; total: number; installments: number; amount: number;
   paidCount: number; firstDue: string; person: Person | null; shared: boolean;
   overrides?: Record<number, number> | undefined; // installment index -> custom amount
   origin?: string;
+  /** Own split: percent of each installment paid by the first person (0-100). */
+  splitA?: number | undefined;
   ref?: number;
   ref_ym?: string;
 }
@@ -104,7 +108,7 @@ export function incomeReceipts(inc: Income, m: string, factor = 1) {
 
 export interface Item {
   key: string; kind: "bill" | "debt"; refId: string; name: string; date: string;
-  amount: number; paid: boolean; shared: boolean; person: Person | null; installment?: number;
+  amount: number; paid: boolean; shared: boolean; person: Person | null; installment?: number; splitA?: number | undefined;
 }
 
 export function debtInstallment(d: Debt, m: string) {
@@ -134,6 +138,17 @@ export function editDebt(d: Debt, patch: Partial<Debt>, month: string, current?:
 export function newDebt(month: string): Debt {
   return { id: uid(), name: 'Nova dívida', origin: '', amount: 0, total: 0, installments: 10,
     paidCount: 0, firstDue: `${month}-10`, person: 0, shared: false, ref: 1, ref_ym: month };
+}
+
+/** Who pays an item: an own split wins over the shared/individual setting. */
+export function payerOf(x: { shared: boolean; person: Person | null; splitA?: number | undefined }): { shared: boolean; person: Person | null; splitA?: number | undefined } {
+  return x.splitA !== undefined ? { shared: false, person: null, splitA: x.splitA } : { shared: x.shared, person: x.person };
+}
+export const clampPct = (n: number) => Math.min(100, Math.max(0, Math.round(Number.isFinite(n) ? n : 0)));
+/** Readable payer: "Compartilhada", a person, or "Bianca 50% · Julio 50%" for an own split. */
+export function payerLabel(names: [string, string], x: { shared: boolean; person: Person | null; splitA?: number | undefined }, sharedText = "Compartilhada"): string {
+  if (x.splitA !== undefined) return `${names[0]} ${clampPct(x.splitA)}% · ${names[1]} ${100 - clampPct(x.splitA)}%`;
+  return x.shared || x.person === null ? sharedText : names[x.person];
 }
 
 /** Is the fixed bill in force in month m (from start to end, both included)? */
@@ -184,12 +199,12 @@ export function itemsForMonth(s: AppState, m: string): Item[] {
   const items: Item[] = [];
   for (const b of s.bills) {
     if (!billActive(b, m)) continue;
-    items.push({ key: `b-${b.id}-${m}`, kind: "bill", refId: b.id, name: b.name, date: iso(m, b.day), amount: billAmount(b, m), paid: !!b.paid[m], shared: b.shared, person: b.person });
+    items.push({ key: `b-${b.id}-${m}`, kind: "bill", refId: b.id, name: b.name, date: iso(m, b.day), amount: billAmount(b, m), paid: !!b.paid[m], ...payerOf(b) });
   }
   for (const d of s.debts) {
     const i = debtInstallment(d, m);
     if (!i) continue;
-    items.push({ key: `d-${d.id}-${m}`, kind: "debt", refId: d.id, name: `${d.name} (${i.index + 1}/${d.installments})`, date: i.date, amount: i.amount, paid: i.paid, shared: d.shared, person: d.person, installment: i.index });
+    items.push({ key: `d-${d.id}-${m}`, kind: "debt", refId: d.id, name: `${d.name} (${i.index + 1}/${d.installments})`, date: i.date, amount: i.amount, paid: i.paid, installment: i.index, ...payerOf(d) });
   }
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -236,7 +251,10 @@ export function summarize(s: AppState, m: string, opts: { factor?: number | unde
   const sharedTotal = items.filter((i) => i.shared).reduce((a, i) => a + i.amount, 0);
   const share = splitAmount(sharedTotal, s.split[0]);
   const individual: [number, number] = [0, 0];
-  for (const i of items) if (!i.shared && i.person !== null) individual[i.person] += i.amount;
+  for (const i of items) {
+    if (i.splitA !== undefined) { const [a, b] = splitAmount(i.amount, clampPct(i.splitA)); individual[0] += a; individual[1] += b; }
+    else if (!i.shared && i.person !== null) individual[i.person] += i.amount;
+  }
   const weeks = weekdayDates(m, s.freeWeekday).length;
   const freeMoney: [number, number] = [s.weeklyFree[0] * weeks, s.weeklyFree[1] * weeks];
   const totalIncome = income[0] + income[1];

@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppState } from '@/lib/household';
-import { BRL, debtCur, editDebt, newDebt, toCents, type Debt, type Person } from '@/lib/finance';
+import { BRL, debtCur, editDebt, newDebt, payerLabel, toCents, type Debt, type Person } from '@/lib/finance';
 import { debtSituation } from '@/lib/planning-model';
 import { Empty, NativeSelect } from './ui-bits';
 
 interface Draft { name: string; origin: string; owner: string; amount: string; day: string; current: string; start: string; count: string }
 
 const toDraft = (d: Debt, month: string): Draft => ({
-  name: d.name, origin: d.origin ?? '', owner: d.shared ? 'both' : String(d.person ?? 0), amount: String(d.amount / 100),
+  name: d.name, origin: d.origin ?? '', owner: d.splitA !== undefined ? 'custom' : d.shared ? 'both' : String(d.person ?? 0), amount: String(d.amount / 100),
   day: String(Number(d.firstDue.slice(8, 10))), current: String(d.ref ?? debtCur(d, month)), start: d.ref_ym ?? month, count: String(d.installments),
 });
 
@@ -25,7 +25,8 @@ function applyDraft(d: Debt, f: Draft): Debt | string {
   if (!Number.isInteger(count) || count < 1) return 'O total de parcelas deve ser 1 ou mais.';
   if (!Number.isInteger(current) || current < 1 || current > count) return 'O número da parcela deve estar entre 1 e o total de parcelas.';
   if (!/^\d{4}-\d{2}$/.test(f.start)) return 'Escolha o mês em que essa parcela cai.';
-  const owner = f.owner === 'both' ? { shared: true, person: null } : { shared: false, person: Number(f.owner) as Person };
+  // 'custom' keeps the own split set in the Divisão tab; any other choice replaces it.
+  const owner = f.owner === 'custom' ? {} : f.owner === 'both' ? { shared: true, person: null, splitA: undefined } : { shared: false, person: Number(f.owner) as Person, splitA: undefined };
   const patch: Partial<Debt> = { name: f.name.trim(), origin: f.origin.trim(), amount, installments: count, ...owner, firstDue: `${d.firstDue.slice(0, 7)}-${String(day).padStart(2, '0')}` };
   return editDebt(d, patch, f.start, current);
 }
@@ -36,7 +37,7 @@ function DebtForm({ id, draft, setDraft, names }: { id: string; draft: Draft; se
   return <div className="debt-editor-fields">
     <div><Label htmlFor={fieldId('name')}>Nome</Label><Input id={fieldId('name')} value={draft.name} onChange={e => set({ name: e.target.value })} /></div>
     <div><Label htmlFor={fieldId('origin')}>Onde é a dívida</Label><Input id={fieldId('origin')} placeholder="Ex.: cartão do pai" value={draft.origin} onChange={e => set({ origin: e.target.value })} /></div>
-    <div><Label htmlFor={fieldId('owner')}>Responsável</Label><NativeSelect id={fieldId('owner')} value={draft.owner} onChange={e => set({ owner: e.target.value })}><option value="0">{names[0]}</option><option value="1">{names[1]}</option><option value="both">Os dois</option></NativeSelect></div>
+    <div><Label htmlFor={fieldId('owner')}>Responsável</Label><NativeSelect id={fieldId('owner')} value={draft.owner} onChange={e => set({ owner: e.target.value })}><option value="0">{names[0]}</option><option value="1">{names[1]}</option><option value="both">Os dois</option>{draft.owner === 'custom' && <option value="custom">Dividido por % (aba Divisão)</option>}</NativeSelect></div>
     <div><Label htmlFor={fieldId('amount')}>Valor da parcela (R$)</Label><Input id={fieldId('amount')} type="number" min="0" step="0.01" value={draft.amount} onChange={e => set({ amount: e.target.value })} /></div>
     <div><Label htmlFor={fieldId('day')}>Vence no dia</Label><Input id={fieldId('day')} type="number" min="1" max="31" value={draft.day} onChange={e => set({ day: e.target.value })} /></div>
     <div><Label htmlFor={fieldId('current')}>Esta parcela é a número</Label><Input id={fieldId('current')} type="number" min="1" step="1" value={draft.current} onChange={e => set({ current: e.target.value })} /></div>
@@ -58,7 +59,7 @@ function DebtCard({ d, month }: { d: Debt; month: string }) {
     update(st => ({ ...st, debts: st.debts.map(x => x.id === d.id ? r : x) }));
     setDraft(null); toast.success('Dívida salva.');
   };
-  const owner = d.shared ? 'Os dois' : s.names[d.person ?? 0];
+  const owner = payerLabel(s.names, d, 'Os dois');
   return <article className="debt-editor-card" aria-label={d.name || 'Dívida'}>
     <div className="mb-4 flex items-center justify-between gap-3">
       <h2 className="text-lg">{d.name || 'Dívida'}{d.origin && <small className="ml-2 text-sm font-normal text-muted-foreground">{d.origin}</small>}</h2>
