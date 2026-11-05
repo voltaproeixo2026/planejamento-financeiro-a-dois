@@ -103,3 +103,21 @@ describe('Debt screen totals and installments', () => {
     expect(document.querySelector('#debt-month-list')!.textContent).toContain('Desfazer');
   });
 });
+
+describe('Dívida em conjunto na tela', () => {
+  const shared = () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.split = [60, 40];
+    s.debts = [{ ...newDebt('2026-10'), id: 'car', name: 'Carro', amount: 10000, installments: 10, total: 100000, ref: 1, ref_ym: '2026-10', firstDue: '2026-10-10', shared: true, person: null }];
+    return s;
+  };
+  it('mostra o total e a parte de cada um no cartão da dívida e na lista de parcelas', () => {
+    household.state = shared();
+    render(<DebtScreen month="2026-10" />);
+    const card = document.querySelector('[aria-label="Divisão da dívida entre os dois"]')!;
+    expect(card.textContent).toMatch(/Parcela.*R\$\s100,00.*R\$\s60,00.*R\$\s40,00/);
+    expect(card.textContent).toMatch(/Total da dívida.*R\$\s1\.000,00.*R\$\s600,00.*R\$\s400,00/);
+    expect(document.querySelector('#debt-month-list')!.textContent).toMatch(/Bianca R\$\s60,00 · Julio R\$\s40,00/);
+  });
+});
+

@@ -29,4 +29,16 @@ describe('Resumo: contas pagas', () => {
     render(<Dashboard month="2026-10" />);
     expect((screen.getByRole('button', { name: 'Pagar' }) as HTMLButtonElement).disabled).toBe(true); // parcela 1 ainda não foi paga
   });
+
+  it('Resumo mostra o total da dívida em conjunto e a parte de cada um', () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.split = [60, 40];
+    s.debts = [{ ...newDebt('2026-10'), name: 'Carro', amount: 10000, installments: 10, ref: 1, ref_ym: '2026-10', firstDue: '2026-10-10', shared: true, person: null }];
+    household.state = s;
+    render(<Dashboard month="2026-10" />);
+    const card = document.querySelector('#debt-home')!.textContent!;
+    expect(card).toMatch(/Parcela R\$\s100,00: Bianca R\$\s60,00 · Julio R\$\s40,00/);
+    expect(card).toMatch(/R\$\s1\.000,00.*total da dívida.*Bianca R\$\s600,00.*Julio R\$\s400,00/);
+  });
 });
+

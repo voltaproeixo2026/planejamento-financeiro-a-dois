@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppState } from '@/lib/household';
-import { BRL, debtCur, editDebt, newDebt, payerLabel, toCents, type Debt, type Person } from '@/lib/finance';
-import { debtSituation } from '@/lib/planning-model';
+import { BRL, debtCur, debtSummary, editDebt, newDebt, payerLabel, toCents, type Debt, type Person } from '@/lib/finance';
+import { debtSituation, debtSplit } from '@/lib/planning-model';
 import { Empty, NativeSelect } from './ui-bits';
 
 interface Draft { name: string; origin: string; owner: string; amount: string; day: string; current: string; start: string; count: string }
@@ -60,6 +60,7 @@ function DebtCard({ d, month }: { d: Debt; month: string }) {
     setDraft(null); toast.success('Dívida salva.');
   };
   const owner = payerLabel(s.names, d, 'Os dois');
+  const split = debtSplit(s, d);
   return <article className="debt-editor-card" aria-label={d.name || 'Dívida'}>
     <div className="mb-4 flex items-center justify-between gap-3">
       <h2 className="text-lg">{d.name || 'Dívida'}{d.origin && <small className="ml-2 text-sm font-normal text-muted-foreground">{d.origin}</small>}</h2>
@@ -73,7 +74,12 @@ function DebtCard({ d, month }: { d: Debt; month: string }) {
       <Fact label="Valor da parcela">{BRL(d.amount)}</Fact>
       <Fact label="Vence no dia">{Number(d.firstDue.slice(8, 10))}</Fact>
       <Fact label="Total de parcelas">{d.installments}</Fact>
+      <Fact label="Total da dívida">{BRL(d.amount * d.installments)}</Fact>
+      <Fact label="Falta pagar">{BRL(debtSummary(d).remaining)}</Fact>
     </dl>}
+    {!draft && split && <table className="mt-4 w-full text-sm" aria-label="Divisão da dívida entre os dois"><thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-normal" /><th className="font-normal">Total</th><th className="font-normal">{s.names[0]} ({split.pctA}%)</th><th className="font-normal">{s.names[1]} ({100 - split.pctA}%)</th></tr></thead><tbody>
+      {([['Parcela', d.amount, split.installment], ['Total da dívida', d.amount * d.installments, split.total], ['Falta pagar', debtSummary(d).remaining, split.remaining]] as const).map(([label, all, [a, b]]) => <tr key={label} className="border-t"><th scope="row" className="py-2 text-left font-normal text-muted-foreground">{label}</th><td className="tabular-nums">{BRL(all)}</td><td className="tabular-nums">{BRL(a)}</td><td className="tabular-nums">{BRL(b)}</td></tr>)}
+    </tbody></table>}
     {confirmRemove && !draft && <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm"><span>Remover {d.name || 'esta dívida'} de todos os meses? Isso não pode ser desfeito.</span><Button size="sm" variant="destructive" onClick={() => update(st => ({ ...st, debts: st.debts.filter(x => x.id !== d.id) }))}>Remover</Button><Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>Cancelar</Button></div>}
     <p className="mt-4 border-t pt-3 text-sm text-muted-foreground" aria-live="polite">{debtSituation(d, month)}</p>
   </article>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState, jointCashflow, summarize, type AppState } from './finance';
-import { debtOwnerTotals, divisionChoice, divisionControl, divisionView, divisionWeekly, payerRows, setItemPayer } from './planning-model';
+import { debtHomeView, debtOwnerTotals, debtSplit, divisionChoice, divisionControl, divisionView, divisionWeekly, payerRows, setItemPayer } from './planning-model';
 
 const month = '2026-10';
 function state(): AppState {
@@ -110,5 +110,36 @@ describe('divisão personalizada por conta', () => {
     expect(t[0]!.monthly).toBe(10000);
     expect(t[1]!.monthly).toBe(10000);
     expect(t[2]!.monthly).toBe(50000);
+  });
+});
+
+describe('dívida em conjunto: parte de cada um', () => {
+  const s0 = () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.split = [60, 40];
+    s.debts = [
+      { id: 'car', name: 'Carro', total: 100000, installments: 10, amount: 10000, paidCount: 2, firstDue: '2026-08-10', person: null, shared: true },
+      { id: 'sol', name: 'Cartão', total: 40000, installments: 4, amount: 10000, paidCount: 0, firstDue: '2026-10-10', person: 1, shared: false },
+    ];
+    return s;
+  };
+  it('divide parcela, total e o que falta pelo método da divisão', () => {
+    const s = s0();
+    expect(debtSplit(s, s.debts[0]!)).toEqual({ pctA: 60, installment: [6000, 4000], total: [60000, 40000], remaining: [48000, 32000] });
+  });
+  it('usa a porcentagem própria da dívida quando houver', () => {
+    const s = s0();
+    const own = setItemPayer(s, { kind: 'debt', refId: 'car' }, 'custom', 25);
+    expect(debtSplit(own, own.debts[0]!)?.installment).toEqual([2500, 7500]);
+  });
+  it('dívida de uma pessoa só não tem divisão', () => {
+    const s = s0();
+    expect(debtSplit(s, s.debts[1]!)).toBeNull();
+  });
+  it('o resumo traz total e partes de cada um', () => {
+    const s = s0();
+    const home = debtHomeView(s, '2026-10');
+    expect(home.find(d => d.id === 'car')).toMatchObject({ total: 100000, amount: 10000, split: { total: [60000, 40000] } });
+    expect(home.find(d => d.id === 'sol')?.split).toBeNull();
   });
 });

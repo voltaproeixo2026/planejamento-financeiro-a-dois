@@ -59,7 +59,7 @@ export function debtHomeView(s: AppState, month: string) {
       owner: payerLabel(s.names, d, 'Os dois'),
       current: installment ? installment.index + 1 : null,
       installments: d.installments, left: balance.left, remaining: balance.remaining,
-      total: d.amount * d.installments,
+      total: d.amount * d.installments, amount: d.amount, split: debtSplit(s, d),
       firstMonth: d.firstDue.slice(0, 7), lastMonth: addMonths(d.firstDue.slice(0, 7), d.installments - 1), status,
     };
   }).sort((a, b) => {
@@ -221,4 +221,12 @@ export function payerRows(s: AppState, month: string): PayerRow[] {
     const [partA, partB] = splitAmount(i.amount, pctA);
     return { key: i.key, kind: i.kind, refId: i.refId, name: i.name, amount: i.amount, mode, pctA, partA, partB };
   });
+}
+
+export interface DebtSplit { pctA: number; installment: [number, number]; total: [number, number]; remaining: [number, number] }
+/** What each person owes of a debt held together (or with an own split); null when one person owns it alone. */
+export function debtSplit(s: AppState, d: Debt): DebtSplit | null {
+  if (d.splitA === undefined && !(d.shared || d.person === null)) return null;
+  const pctA = d.splitA !== undefined ? clampPct(d.splitA) : s.split[0];
+  return { pctA, installment: splitAmount(d.amount, pctA), total: splitAmount(d.amount * d.installments, pctA), remaining: splitAmount(debtSummary(d).remaining, pctA) };
 }
