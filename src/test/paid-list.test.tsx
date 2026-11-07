@@ -73,8 +73,8 @@ describe('Resumo: contas pagas', () => {
     expect(rows()).toHaveLength(5); // Água, Luz, Cartão mãe (2 dívidas), Cartão pai, Financiamento
     const mae = rows().find(r => r.textContent!.includes('Cartão mãe'))!;
     expect(mae.textContent).toMatch(/R\$\s500,00/);
-    expect(mae.textContent).toContain('Mecânico');
-    expect(mae.textContent).toContain('Geladeira');
+    expect(mae.textContent).not.toContain('Mecânico'); // só o nome do cartão e o total
+    expect(mae.textContent).not.toContain('Geladeira');
     fireEvent.click(within(mae as HTMLElement).getByRole('button', { name: 'Pagar' }));
     expect(household.state.debts.map(d => d.paidCount)).toEqual([1, 1, 0, 0]);
     view.rerender(<Dashboard month="2026-10" />);
