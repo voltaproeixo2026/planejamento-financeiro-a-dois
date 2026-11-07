@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAppState } from "@/lib/household";
-import { BRL, addMonths, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
+import { BILL_CATEGORIES, BRL, addMonths, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
 import { togglePaid } from "./Dashboard";
 
@@ -158,7 +158,7 @@ type Pending = { id: string; kind: "stop" | "delete" } | null;
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
-  const [f, setF] = useState({ name: "", category: "", amount: "", day: "10", person: "", once: false });
+  const [f, setF] = useState({ name: "", category: BILL_CATEGORIES[0] as string, amount: "", day: "10", person: "", once: false });
   const [dup, setDup] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
@@ -194,7 +194,7 @@ function Bills({ month }: { month: string }) {
       action={items.length ? <Button size="sm" variant="outline" onClick={repeatAll}>Repetir todas em {monthLabel(next)}</Button> : undefined}>
       <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-8">
         <F label="Nome"><Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDup(false); }} /></F>
-        <F label="Categoria"><Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} /></F>
+        <F label="Categoria"><NativeSelect aria-label="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{BILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</NativeSelect></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
         <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
         <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>

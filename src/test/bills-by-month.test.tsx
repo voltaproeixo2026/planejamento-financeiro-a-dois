@@ -21,7 +21,7 @@ describe('Contas fixas por mês', () => {
     const add = (month: string) => {
       rerender(<Accounts month={month} />);
       const form = screen.getByLabelText('Mês de início').closest('form')!;
-      const [name, , amount] = Array.from(form.querySelectorAll('input'));
+      const [name, amount] = Array.from(form.querySelectorAll('input'));
       fireEvent.change(name!, { target: { value: 'Internet' } });
       fireEvent.change(amount!, { target: { value: '100' } });
       fireEvent.submit(form);
@@ -68,7 +68,7 @@ describe('Contas fixas por mês', () => {
     household.state = emptyState(['Bianca', 'Julio']);
     render(<Accounts month="2026-10" />);
     const form = screen.getByLabelText('Mês de início').closest('form')!;
-    const [name, , amount] = Array.from(form.querySelectorAll('input'));
+    const [name, amount] = Array.from(form.querySelectorAll('input'));
     fireEvent.change(name!, { target: { value: 'Financiamento (setembro)' } });
     fireEvent.change(amount!, { target: { value: '800' } });
     fireEvent.change(screen.getByLabelText('Repete?'), { target: { value: 'once' } });
@@ -84,5 +84,19 @@ describe('Contas fixas por mês', () => {
     fireEvent.submit(carryForm);
     expect(household.state.carry).toMatchObject([{ desc: 'Guardado de setembro', amount: 80000, month: '2026-10' }]);
   });
-});
 
+  it('a categoria da conta fixa é escolhida numa lista pronta', () => {
+    household.state = emptyState(['Bianca', 'Julio']);
+    render(<Accounts month="2026-10" />);
+    const select = screen.getByLabelText('Categoria') as HTMLSelectElement;
+    expect(Array.from(select.options).map(o => o.value)).toEqual(expect.arrayContaining(['Casa', 'Entretenimento', 'Veículo', 'Outros']));
+    expect(select.value).toBe('Casa');
+    const form = select.closest('form')!;
+    const [name, amount] = Array.from(form.querySelectorAll('input'));
+    fireEvent.change(name!, { target: { value: 'Netflix' } });
+    fireEvent.change(amount!, { target: { value: '45' } });
+    fireEvent.change(select, { target: { value: 'Entretenimento' } });
+    fireEvent.submit(form);
+    expect(household.state.bills[0]).toMatchObject({ name: 'Netflix', category: 'Entretenimento' });
+  });
+});

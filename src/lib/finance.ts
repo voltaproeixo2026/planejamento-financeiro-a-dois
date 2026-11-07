@@ -151,6 +151,9 @@ export function payerLabel(names: [string, string], x: { shared: boolean; person
   return x.shared || x.person === null ? sharedText : names[x.person];
 }
 
+/** Categories offered when adding a fixed bill. Bills saved earlier keep whatever category they have. */
+export const BILL_CATEGORIES = ["Casa", "Alimentação", "Veículo", "Saúde", "Educação", "Entretenimento", "Assinaturas", "Pet", "Impostos e taxas", "Outros"] as const;
+
 /** Is the fixed bill in force in month m (from start to end, both included)? */
 export const billActive = (b: Bill, m: string) => m >= b.start && !(b.end && m > b.end);
 
