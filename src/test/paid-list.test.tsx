@@ -57,5 +57,31 @@ describe('Resumo: contas pagas', () => {
     expect(card).toMatch(/Parcela R\$\s100,00: Bianca R\$\s60,00 · Julio R\$\s40,00/);
     expect(card).toMatch(/R\$\s1\.000,00.*total da dívida.*Bianca R\$\s600,00.*Julio R\$\s400,00/);
   });
+
+  it('Próximos vencimentos: contas fixas separadas e dívidas do mesmo cartão numa linha só, com o total', () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.bills = [
+      { id: 'luz', name: 'Luz', category: 'Casa', amount: 18000, day: 15, person: null, shared: true, start: '2026-10', paid: {} },
+      { id: 'agua', name: 'Água', category: 'Casa', amount: 7000, day: 8, person: null, shared: true, start: '2026-10', paid: {} },
+    ];
+    const debt = (id: string, name: string, amount: number, origin: string) => ({ ...newDebt('2026-10'), id, name, origin, amount, installments: 6, ref: 1, ref_ym: '2026-10', firstDue: '2026-10-12', shared: true, person: null });
+    s.debts = [debt('a', 'Mecânico', 30000, 'Cartão mãe'), debt('b', 'Geladeira', 20000, 'cartão mãe'), debt('c', 'Notebook', 15000, 'Cartão pai'), debt('d', 'Financiamento', 65000, '')];
+    household.state = s;
+    const view = render(<Dashboard month="2026-10" />);
+    const list = () => document.querySelector('#upcoming')!;
+    const rows = () => Array.from(list().querySelectorAll('li'));
+    expect(rows()).toHaveLength(5); // Água, Luz, Cartão mãe (2 dívidas), Cartão pai, Financiamento
+    const mae = rows().find(r => r.textContent!.includes('Cartão mãe'))!;
+    expect(mae.textContent).toMatch(/R\$\s500,00/);
+    expect(mae.textContent).toContain('Mecânico');
+    expect(mae.textContent).toContain('Geladeira');
+    fireEvent.click(within(mae as HTMLElement).getByRole('button', { name: 'Pagar' }));
+    expect(household.state.debts.map(d => d.paidCount)).toEqual([1, 1, 0, 0]);
+    view.rerender(<Dashboard month="2026-10" />);
+    expect(rows()).toHaveLength(4);
+    const paid = document.querySelector('#paid-list')!;
+    expect(paid.querySelectorAll('li')).toHaveLength(1);
+    expect(paid.textContent).toMatch(/Cartão mãe.*R\$\s500,00/);
+  });
 });
 

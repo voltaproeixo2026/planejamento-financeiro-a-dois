@@ -35,14 +35,37 @@ export function canToggle(s: AppState, i: Item) {
   return !!d && i.installment === d.paidCount - 1;
 }
 
+export interface Row { key: string; name: string; sub?: string; date: string; amount: number; items: Item[]; who: string }
+/** Fixed bills stay on their own line; debts that share the same "Onde é a dívida" (for example "Cartão mãe") become one line with the total. */
+export function groupRows(s: AppState, items: Item[]): Row[] {
+  const rows: Row[] = [];
+  const byOrigin = new Map<string, Row>();
+  for (const i of items) {
+    const d = i.kind === 'debt' ? s.debts.find(x => x.id === i.refId) : undefined;
+    const origin = d?.origin?.trim();
+    if (!origin) { rows.push({ key: i.key, name: i.name, date: i.date, amount: i.amount, items: [i], who: payerLabel(s.names, i) }); continue; }
+    const k = origin.toLowerCase();
+    let r = byOrigin.get(k);
+    if (!r) { r = { key: `origin-${k}`, name: origin, date: i.date, amount: 0, items: [], who: '' }; byOrigin.set(k, r); rows.push(r); }
+    r.items.push(i); r.amount += i.amount; if (i.date < r.date) r.date = i.date;
+  }
+  for (const r of rows) if (byOrigin.has(r.key.replace('origin-', ''))) {
+    r.sub = r.items.map(i => i.name).join(' · ');
+    const who = new Set(r.items.map(i => payerLabel(s.names, i)));
+    r.who = who.size === 1 ? [...who][0]! : 'Vários';
+  }
+  return rows.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => void }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
   const sum = summarize(s, month, { today });
   const next = summarize(s, addMonths(month, 1), { today });
   const attention = alerts(s, month, today);
-  const upcoming = sum.items.filter(i => !i.paid).slice(0, 6);
+  const upcoming = groupRows(s, sum.items.filter(i => !i.paid)).slice(0, 6);
   const paidItems = sum.items.filter(i => i.paid);
+  const paidRows = groupRows(s, paidItems);
   const allocation = allocationView(s, month);
   const totals = debtTotals(s, month);
   const debts = debtHomeView(s, month);
@@ -54,10 +77,10 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
         {[{ label: 'Entra no mês', value: sum.totalIncome }, { label: 'Já saiu', value: sum.paid }, { label: 'Falta pagar', value: sum.pending }, { label: 'Sobra prevista', value: sum.leftover }].map(x => <div key={x.label}><dt className="text-sm text-muted-foreground">{x.label}</dt><dd className="mt-1 text-2xl font-semibold">{BRL(x.value)}</dd></div>)}
       </dl>
       <h2 className="text-lg">Próximos vencimentos</h2>
-      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month, s)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
+      {upcoming.length ? <ul id="upcoming" className="mt-2 divide-y">{upcoming.map(r => <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{fmtDate(r.date)} · {r.who}</p>{r.sub && <p className="text-xs text-muted-foreground">{r.sub}</p>}</div><div className="flex flex-wrap items-center gap-2"><b>{BRL(r.amount)}</b><Status paid={false} overdue={r.date < today} /><Button size="sm" variant="outline" onClick={() => r.items.forEach(i => togglePaid(update, i, month, s))}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
       <div id="paid-list" className="mt-6 border-t pt-4">
         <h2 className="text-lg">Já pagas neste mês</h2>
-        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month, s)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
+        {paidItems.length ? <><ul className="mt-2 divide-y">{paidRows.map(r => <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{fmtDate(r.date)} · {r.who}</p>{r.sub && <p className="text-xs text-muted-foreground">{r.sub}</p>}</div><div className="flex flex-wrap items-center gap-2"><b>{BRL(r.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!r.items.every(i => canToggle(s, i))} onClick={() => r.items.forEach(i => togglePaid(update, i, month, s))}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
       </div>
     </section>
     <Section id="next-card" title="Previsão do próximo mês">
