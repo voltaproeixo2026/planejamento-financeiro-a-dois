@@ -226,7 +226,7 @@ function Bills({ month }: { month: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <BillValue key={`${b.id}-${month}-${i.amount}`} id={`bill-value-${b.id}`} cents={i.amount} onCommit={(c) => patchBill(b.id, (x) => setBillMonthValue(x, month, c))} />
                 <Status paid={i.paid} overdue={i.date < today} />
-                <Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month)}>{i.paid ? "Desfazer" : "Marcar paga"}</Button>
+                <Button size="sm" variant="outline" onClick={() => togglePaid(update, i, month, s)}>{i.paid ? "Desfazer" : "Marcar paga"}</Button>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">

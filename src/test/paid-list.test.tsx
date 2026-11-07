@@ -22,14 +22,31 @@ describe('Resumo: contas pagas', () => {
     fireEvent.click(within(paid as HTMLElement).getByRole('button', { name: 'Desfazer' }));
     expect(household.state.bills[0]?.paid['2026-10']).toBe(false);
   });
-  it('parcela de dívida só pode ser paga na ordem', () => {
+  it('parcela de uma dívida cadastrada no meio (parcela 3 deste mês) pode ser paga e vai para "Já pagas"', () => {
     const s = emptyState(['Bianca', 'Julio']);
-    s.debts = [{ ...newDebt('2026-10'), name: 'Cartão', amount: 10000, installments: 3, ref: 2, ref_ym: '2026-10', firstDue: '2026-09-10' }];
+    s.debts = [{ ...newDebt('2026-10'), name: 'Cartão', amount: 10000, installments: 6, ref: 3, ref_ym: '2026-10', firstDue: '2026-08-10', paidCount: 0 }];
     household.state = s;
-    render(<Dashboard month="2026-10" />);
-    expect((screen.getByRole('button', { name: 'Pagar' }) as HTMLButtonElement).disabled).toBe(true); // parcela 1 ainda não foi paga
+    const view = render(<Dashboard month="2026-10" />);
+    const pay = screen.getByRole('button', { name: 'Pagar' }) as HTMLButtonElement;
+    expect(pay.disabled).toBe(false);
+    fireEvent.click(pay);
+    expect(household.state.debts[0]?.paidCount).toBe(3); // as parcelas 1 e 2 já estavam pagas
+    view.rerender(<Dashboard month="2026-10" />);
+    expect(within(document.querySelector('#paid-list') as HTMLElement).getByText(/Cartão/)).toBeTruthy();
   });
-
+  it('só a parcela paga mais recente pode ser desfeita', () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.debts = [{ ...newDebt('2026-10'), name: 'Cartão', amount: 10000, installments: 6, ref: 3, ref_ym: '2026-10', firstDue: '2026-08-10', paidCount: 3 }];
+    household.state = s;
+    const view = render(<Dashboard month="2026-10" />);
+    fireEvent.click(within(document.querySelector('#paid-list') as HTMLElement).getByRole('button', { name: 'Desfazer' }));
+    expect(household.state.debts[0]?.paidCount).toBe(2);
+    cleanup();
+    household.state = { ...s, debts: [{ ...s.debts[0]!, paidCount: 5 }] };
+    view.unmount();
+    render(<Dashboard month="2026-10" />);
+    expect((within(document.querySelector('#paid-list') as HTMLElement).getByRole('button', { name: 'Desfazer' }) as HTMLButtonElement).disabled).toBe(true);
+  });
   it('Resumo mostra o total da dívida em conjunto e a parte de cada um', () => {
     const s = emptyState(['Bianca', 'Julio']);
     s.split = [60, 40];

@@ -1,4 +1,5 @@
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
 import { addMonths, alerts, BRL, fmtDate, monthLabel, payerLabel, summarize, type AppState, type Item } from '@/lib/finance';
@@ -6,24 +7,32 @@ import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { Report } from './Report';
 
-export function togglePaid(update: ReturnType<typeof useAppState>['update'], i: Item, month: string) {
-  update((s) => {
-    if (i.kind === 'bill') return { ...s, bills: s.bills.map(b => b.id === i.refId ? { ...b, paid: { ...b.paid, [month]: !b.paid[month] } } : b) };
-    return { ...s, debts: s.debts.map(d => {
+/**
+ * Marks a bill or a debt installment as paid (or undoes it).
+ * Debt payments are a counter of paid installments, so paying this month's installment also counts the earlier ones as paid
+ * (a debt registered mid-way already has them paid). Only the latest paid installment can be undone.
+ */
+export function togglePaid(update: ReturnType<typeof useAppState>['update'], i: Item, month: string, s?: AppState) {
+  if (s && i.kind === 'debt' && !i.paid && i.installment !== undefined) {
+    const d = s.debts.find(x => x.id === i.refId);
+    if (d && i.installment + 1 - d.paidCount > 1) toast.info(`${d.name}: as parcelas de ${d.paidCount + 1} a ${i.installment + 1} foram marcadas como pagas.`);
+  }
+  update((st) => {
+    if (i.kind === 'bill') return { ...st, bills: st.bills.map(b => b.id === i.refId ? { ...b, paid: { ...b.paid, [month]: !b.paid[month] } } : b) };
+    return { ...st, debts: st.debts.map(d => {
       if (d.id !== i.refId || i.installment === undefined) return d;
-      if (!i.paid && i.installment === d.paidCount) return { ...d, paidCount: d.paidCount + 1 };
-      if (i.paid && i.installment === d.paidCount - 1) return { ...d, paidCount: d.paidCount - 1 };
+      if (!i.paid) return { ...d, paidCount: Math.max(d.paidCount, i.installment + 1) };
+      if (i.installment === d.paidCount - 1) return { ...d, paidCount: d.paidCount - 1 };
       return d;
     }) };
   });
 }
 
-/** Debt installments are paid in order, so only the next one can be paid and only the last paid one undone. */
+/** Any unpaid item can be paid; a paid debt installment can be undone only when it is the latest one paid. */
 export function canToggle(s: AppState, i: Item) {
-  if (i.kind === 'bill') return true;
+  if (i.kind === 'bill' || !i.paid) return true;
   const d = s.debts.find(x => x.id === i.refId);
-  if (!d || i.installment === undefined) return false;
-  return i.paid ? i.installment === d.paidCount - 1 : i.installment === d.paidCount;
+  return !!d && i.installment === d.paidCount - 1;
 }
 
 export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => void }) {
@@ -45,10 +54,10 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
         {[{ label: 'Entra no mês', value: sum.totalIncome }, { label: 'Já saiu', value: sum.paid }, { label: 'Falta pagar', value: sum.pending }, { label: 'Sobra prevista', value: sum.leftover }].map(x => <div key={x.label}><dt className="text-sm text-muted-foreground">{x.label}</dt><dd className="mt-1 text-2xl font-semibold">{BRL(x.value)}</dd></div>)}
       </dl>
       <h2 className="text-lg">Próximos vencimentos</h2>
-      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
+      {upcoming.length ? <ul className="mt-2 divide-y">{upcoming.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month, s)}>Pagar</Button></div></li>)}</ul> : <Empty>Nada pendente neste mês.</Empty>}
       <div id="paid-list" className="mt-6 border-t pt-4">
         <h2 className="text-lg">Já pagas neste mês</h2>
-        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
+        {paidItems.length ? <><ul className="mt-2 divide-y">{paidItems.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i)}</p></div><div className="flex flex-wrap items-center gap-2"><b>{BRL(i.amount)}</b><Status paid /><Button size="sm" variant="ghost" disabled={!canToggle(s, i)} onClick={() => togglePaid(update, i, month, s)}>Desfazer</Button></div></li>)}</ul><p className="mt-2 text-sm text-muted-foreground">Total pago: {BRL(paidItems.reduce((a, i) => a + i.amount, 0))}</p></> : <p className="mt-2 text-sm text-muted-foreground">Nada foi marcado como pago neste mês ainda.</p>}
       </div>
     </section>
     <Section id="next-card" title="Previsão do próximo mês">
