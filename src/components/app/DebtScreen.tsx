@@ -17,7 +17,7 @@ export function DebtScreen({ month }: { month: string }) {
   const rows = forecast(s, month, range);
   const changes = debtChanges(s, month, range);
   return <div className="debt-screen space-y-6">
-    <section aria-label="Resumo das dívidas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div><div><dt>Falta pagar</dt><dd id="debt-left">{BRL(totals.remaining)}</dd></div></dl></section>
+    <section aria-label="Resumo das dívidas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div></dl></section>
     <section id="debt-owners" aria-label="Parcelas do mês por pessoa">
       <h2 className="mb-4 text-xl">Quanto cada um deve em {monthLabel(month)}</h2>
       <div className="grid gap-3 sm:grid-cols-3">{owners.map(o => <div key={o.key} className="rounded-xl border bg-card p-4">
