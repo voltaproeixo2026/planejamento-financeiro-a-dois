@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState } from './finance';
-import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks } from './planning-model';
+import { emptyState, billCategories, addCategory, renameCategory, removeCategory } from './finance';
+import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks, categoryColor } from './planning-model';
 
 describe('Planning models', () => {
   it('preserves savings after reserving the next-month cushion', () => {
@@ -53,7 +53,7 @@ describe('Summary reference values', () => {
   it('uses positive leftover as savings and calculates percentages from all segments', () => {
     const s = state();
     s.extras = [];
-    expect(allocationView(s, month)).toEqual([
+    expect(allocationView(s, month).map(g => ({ name: g.name, value: g.value, category: g.category, percent: g.percent }))).toEqual([
       { name: 'Casa', value: 100000, category: 'casa', percent: 20 },
       { name: 'Poupança', value: 400000, category: 'poup', percent: 80 },
     ]);
@@ -62,7 +62,7 @@ describe('Summary reference values', () => {
     const s = state();
     s.incomes = [];
     s.extras = [];
-    expect(allocationView(s, month)).toEqual([{ name: 'Casa', value: 100000, category: 'casa', percent: 100 }]);
+    expect(allocationView(s, month).map(g => ({ name: g.name, value: g.value, category: g.category, percent: g.percent }))).toEqual([{ name: 'Casa', value: 100000, category: 'casa', percent: 100 }]);
   });
   it('presents installment, remaining balance including current, final month and original total', () => {
     const s = state();
@@ -75,7 +75,7 @@ describe('Summary reference values', () => {
     s.weeklyFree = [1000, 1000];
     s.debts = [{ id: 'debt', name: 'Compra', total: 10000, installments: 1, amount: 10000, paidCount: 0, firstDue: '2026-10-05', person: null, shared: true }];
     expect(allocationView(s, month).map(g => [g.category, g.value])).toEqual([
-      ['divida', 10000], ['casa', 100000], ['alim', 10000], ['pet', 10000], ['outros', 10000], ['livre', 8000], ['poup', 452000],
+      ['divida', 10000], ['casa', 100000], ['alimentação', 10000], ['pet', 10000], ['pessoal', 10000], ['livre', 8000], ['poup', 452000],
     ]);
   });
 });
@@ -125,5 +125,64 @@ describe('Mês e Metas', () => {
     expect(without.weakPotential).toBeLessThan(without.potential);
     const goal = { id: 'g', name: 'Viagem', target: 100000, saved: 0, share: 100 };
     expect(goalMonthsAt(goal, without.weakPotential) ?? Infinity).toBeGreaterThanOrEqual(goalMonthsAt(goal, without.potential) ?? Infinity);
+  });
+});
+
+describe('Para onde vai a renda: uma cor por categoria usada', () => {
+  const month = '2026-10';
+  const st = () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.incomes = [{ id: 'i', desc: 'Salário', person: 0, amount: 500000, freq: 'monthly', day: 5, active: true, autonomous: false }];
+    const bill = (id: string, category: string, amount: number) => ({ id, name: id, category, amount, day: 10, person: null, shared: true, start: month, paid: {} });
+    s.bills = [bill('a', 'Casa', 100000), bill('b', 'Moradia', 20000), bill('c', 'Veículo', 30000), bill('d', 'Entretenimento', 15000), bill('e', 'Entretenimento', 5000), bill('f', '', 1000)];
+    return s;
+  };
+  it('mostra só as categorias com valor, cada uma separada, e junta "Moradia" em "Casa"', () => {
+    const g = allocationView(st(), month);
+    expect(g.filter(x => !['divida', 'livre', 'poup'].includes(x.category)).map(x => [x.name, x.value])).toEqual([
+      ['Casa', 120000], ['Veículo', 30000], ['Entretenimento', 20000], ['Outros', 1000],
+    ]);
+    expect(g.some(x => x.name === 'Saúde')).toBe(false);
+  });
+  it('cada categoria tem cor própria e a mesma cor em qualquer mês', () => {
+    const s = st();
+    const colors = allocationView(s, month).map(x => x.color);
+    expect(new Set(colors).size).toBe(colors.length);
+    s.bills = s.bills.filter(b => b.category === 'Veículo');
+    expect(allocationView(s, month).find(x => x.name === 'Veículo')?.color).toBe(categoryColor('Veículo', billCategories(s)));
+  });
+  it('categoria criada pelo casal entra no gráfico', () => {
+    let s = st();
+    const added = addCategory(s, 'Viagens');
+    s = added as typeof s;
+    s.bills.push({ id: 'v', name: 'Hotel', category: 'Viagens', amount: 40000, day: 3, person: null, shared: true, start: month, paid: {} });
+    expect(allocationView(s, month).find(x => x.name === 'Viagens')?.value).toBe(40000);
+  });
+});
+
+describe('editar categorias', () => {
+  const base = () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.bills = [{ id: '1', name: 'Luz', category: 'Casa', amount: 100, day: 1, person: null, shared: true, start: '2026-10', paid: {} }, { id: '2', name: 'Ração', category: 'Pet', amount: 100, day: 1, person: null, shared: true, start: '2026-10', paid: {} }];
+    return s;
+  };
+  it('adiciona, recusa vazia e repetida', () => {
+    const s = base();
+    expect(billCategories(addCategory(s, 'Viagens') as typeof s)).toContain('Viagens');
+    expect(addCategory(s, '  ')).toBe('Digite o nome da categoria.');
+    expect(addCategory(s, 'casa')).toBe('Essa categoria já existe.');
+  });
+  it('renomear muda a lista e as contas que usam a categoria', () => {
+    const s = renameCategory(base(), 'Pet', 'Animais') as ReturnType<typeof base>;
+    expect(billCategories(s)).toContain('Animais');
+    expect(billCategories(s)).not.toContain('Pet');
+    expect(s.bills.map(b => b.category)).toEqual(['Casa', 'Animais']);
+    expect(renameCategory(base(), 'Pet', 'Casa')).toBe('Já existe uma categoria com esse nome.');
+  });
+  it('remover passa as contas para Outros e Outros não pode ser removida', () => {
+    const s = removeCategory(base(), 'Pet');
+    expect(billCategories(s)).not.toContain('Pet');
+    expect(s.bills.map(b => b.category)).toEqual(['Casa', 'Outros']);
+    expect(removeCategory(s, 'Outros')).toBe(s);
   });
 });

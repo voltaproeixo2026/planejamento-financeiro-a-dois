@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAppState } from "@/lib/household";
-import { BILL_CATEGORIES, BRL, addMonths, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
+import { BRL, addCategory, addMonths, billCategories, removeCategory, renameCategory, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
 import { togglePaid } from "./Dashboard";
 
@@ -38,11 +38,56 @@ export function Income({ month }: { month: string }) {
   );
 }
 
+function CategoryRow({ name, count, onRename, onRemove }: { name: string; count: number; onRename: (to: string) => void; onRemove: () => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const commit = () => { if (draft !== null && draft !== name) onRename(draft); setDraft(null); };
+  return (
+    <li className="space-y-2 py-2">
+      <div className="flex items-center gap-2">
+        <Input aria-label={`Nome da categoria ${name}`} className="h-8" value={draft ?? name} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+        <span className="w-20 shrink-0 text-xs text-muted-foreground">{count} {count === 1 ? "conta" : "contas"}</span>
+        {name.toLowerCase() !== "outros" && <Button size="icon" variant="ghost" aria-label={`Remover categoria ${name}`} onClick={() => (count ? setConfirm(true) : onRemove())}><Trash2 className="h-4 w-4" /></Button>}
+      </div>
+      {confirm && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-muted p-3 text-sm">
+        <span>As {count} {count === 1 ? "conta vai" : "contas vão"} para "Outros".</span>
+        <Button size="sm" variant="destructive" onClick={() => { onRemove(); setConfirm(false); }}>Remover</Button><Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Cancelar</Button>
+      </div>}
+    </li>
+  );
+}
+
+function Categories() {
+  const { s, update } = useAppState();
+  const [name, setName] = useState("");
+  const cats = billCategories(s);
+  const run = (fn: (st: typeof s) => typeof s | string) => {
+    const r = fn(s);
+    if (typeof r === "string") { toast.error(r); return false; }
+    update((st) => { const next = fn(st); return typeof next === "string" ? st : next; }); return true;
+  };
+  return (
+    <details className="rounded-xl border bg-card p-4" id="categories">
+      <summary className="cursor-pointer text-lg font-semibold">Categorias das contas</summary>
+      <p className="mt-2 text-sm text-muted-foreground">Renomear muda a categoria de todas as contas que a usam. Cada categoria ganha uma cor no gráfico do Resumo.</p>
+      <ul className="mt-2 divide-y">{cats.map((c) => (
+        <CategoryRow key={c} name={c} count={s.bills.filter((b) => b.category.trim().toLowerCase() === c.toLowerCase()).length}
+          onRename={(to) => run((st) => renameCategory(st, c, to))} onRemove={() => run((st) => removeCategory(st, c))} />
+      ))}</ul>
+      <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (run((st) => addCategory(st, name))) setName(""); }}>
+        <Input aria-label="Nova categoria" placeholder="Nova categoria" value={name} onChange={(e) => setName(e.target.value)} />
+        <Button type="submit">Adicionar</Button>
+      </form>
+    </details>
+  );
+}
+
 /** Aba Contas: só as contas fixas. */
 export function Accounts({ month }: { month: string }) {
   return (
     <div className="space-y-6">
       <Bills month={month} />
+      <Categories />
     </div>
   );
 }
@@ -167,7 +212,7 @@ type Pending = { id: string; kind: "stop" | "delete" } | null;
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
-  const [f, setF] = useState({ name: "", category: BILL_CATEGORIES[0] as string, amount: "", day: "10", person: "", once: false });
+  const [f, setF] = useState({ name: "", category: billCategories(s)[0] ?? "Casa", amount: "", day: "10", person: "", once: false });
   const [dup, setDup] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
@@ -203,7 +248,7 @@ function Bills({ month }: { month: string }) {
       action={items.length ? <Button size="sm" variant="outline" onClick={repeatAll}>Repetir todas em {monthLabel(next)}</Button> : undefined}>
       <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-8">
         <F label="Nome"><Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDup(false); }} /></F>
-        <F label="Categoria"><NativeSelect aria-label="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{BILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</NativeSelect></F>
+        <F label="Categoria"><NativeSelect aria-label="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{billCategories(s).map((c) => <option key={c} value={c}>{c}</option>)}</NativeSelect></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
         <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
         <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
@@ -240,8 +285,8 @@ function Bills({ month }: { month: string }) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <NativeSelect aria-label={`Categoria de ${b.name}`} className="h-8 w-auto text-xs" value={b.category} onChange={(e) => patchBill(b.id, (x) => ({ ...x, category: e.target.value }))}>
-                {!(BILL_CATEGORIES as readonly string[]).includes(b.category) && <option value={b.category}>{b.category || "Sem categoria"}</option>}
-                {BILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {!billCategories(s).includes(b.category) && <option value={b.category}>{b.category || "Sem categoria"}</option>}
+                {billCategories(s).map((c) => <option key={c} value={c}>{c}</option>)}
               </NativeSelect>
               <Button size="sm" variant="secondary" onClick={() => repeat(b)}>Repetir em {monthLabel(next)}</Button>
               {!last && <Button size="sm" variant="ghost" onClick={() => { patchBill(b.id, (x) => lastTimeBill(x, month)); toast.success(`${b.name}: última vez em ${monthLabel(month)}.`); }}>Última vez neste mês</Button>}

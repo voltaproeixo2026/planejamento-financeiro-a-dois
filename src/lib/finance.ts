@@ -51,6 +51,8 @@ export interface AppState {
   savedReal: number;
   isExample: boolean;
   carry?: Carry[] | undefined;
+  /** Categories offered for fixed bills. Missing means the default list. */
+  categories?: string[] | undefined;
 }
 
 export const BRL = (c: number) =>
@@ -153,6 +155,37 @@ export function payerLabel(names: [string, string], x: { shared: boolean; person
 
 /** Categories offered when adding a fixed bill. Bills saved earlier keep whatever category they have. */
 export const BILL_CATEGORIES = ["Casa", "Alimentação", "Veículo", "Saúde", "Educação", "Entretenimento", "Assinaturas", "Pet", "Impostos e taxas", "Outros"] as const;
+
+export const billCategories = (s: Pick<AppState, "categories">): string[] => (s.categories?.length ? s.categories : [...BILL_CATEGORIES]);
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+/** The category a bill counts under: an older "Moradia" is "Casa", names match the list ignoring case, empty is "Outros". */
+export function normalizeCategory(raw: string, cats: string[]): string {
+  const name = raw.trim();
+  if (!name) return "Outros";
+  if (name.toLowerCase() === "moradia") return cats.find((c) => sameName(c, "Casa")) ?? "Casa";
+  return cats.find((c) => sameName(c, name)) ?? name;
+}
+export function addCategory(s: AppState, name: string): AppState | string {
+  const n = name.trim(), cats = billCategories(s);
+  if (!n) return "Digite o nome da categoria.";
+  if (cats.some((c) => sameName(c, n))) return "Essa categoria já existe.";
+  return { ...s, categories: [...cats, n] };
+}
+/** Renames a category in the list and in every bill that uses it. */
+export function renameCategory(s: AppState, from: string, to: string): AppState | string {
+  const n = to.trim(), cats = billCategories(s);
+  if (!n) return "Digite o nome da categoria.";
+  if (sameName(from, n)) return n === from ? s : { ...s, categories: cats.map((c) => (c === from ? n : c)), bills: s.bills.map((b) => (sameName(b.category, from) ? { ...b, category: n } : b)) };
+  if (cats.some((c) => sameName(c, n))) return "Já existe uma categoria com esse nome.";
+  return { ...s, categories: cats.map((c) => (c === from ? n : c)), bills: s.bills.map((b) => (sameName(b.category, from) ? { ...b, category: n } : b)) };
+}
+/** Removes a category; its bills move to "Outros" (which always stays). */
+export function removeCategory(s: AppState, name: string): AppState {
+  if (sameName(name, "Outros")) return s;
+  const cats = billCategories(s).filter((c) => !sameName(c, name));
+  if (!cats.some((c) => sameName(c, "Outros"))) cats.push("Outros");
+  return { ...s, categories: cats, bills: s.bills.map((b) => (sameName(b.category, name) ? { ...b, category: "Outros" } : b)) };
+}
 
 /** Is the fixed bill in force in month m (from start to end, both included)? */
 export const billActive = (b: Bill, m: string) => m >= b.start && !(b.end && m > b.end);

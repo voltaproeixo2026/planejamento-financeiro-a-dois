@@ -1,4 +1,4 @@
-import { addMonths, BRL, carryTotal, clampPct, daysIn, payerLabel, debtCur, debtInstallment, debtSummary, itemsForMonth, jointCashflow, monthLabel, splitAmount, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
+import { addMonths, billCategories, BRL, carryTotal, clampPct, daysIn, payerLabel, debtCur, debtInstallment, debtSummary, itemsForMonth, normalizeCategory, jointCashflow, monthLabel, splitAmount, summarize, transferPlan, type AppState, type Debt, type Move, type Person } from './finance';
 
 export interface Goal { id: string; name: string; target: number; saved: number; share: number }
 export type GoalState = AppState & { goals?: Goal[] };
@@ -26,18 +26,32 @@ export function goalView(goal: Goal, monthly: number) {
 export function debtTotals(s: AppState, month: string) {
   return { monthly: summarize(s, month).debtInstallments, remaining: s.debts.reduce((total, d) => total + debtSummary(d).remaining, 0) };
 }
+const FIXED_COLORS: Record<string, string> = { casa: 'var(--c-casa)', 'alimentação': 'var(--c-alim)', pet: 'var(--c-pet)', outros: 'var(--c-outros)' };
+/** Stable color for a bill category: the familiar ones keep theirs, the others take the next free color by their place in the list. */
+export function categoryColor(name: string, cats: string[]): string {
+  const key = name.trim().toLowerCase();
+  if (FIXED_COLORS[key]) return FIXED_COLORS[key];
+  const others = cats.filter(c => !FIXED_COLORS[c.trim().toLowerCase()]);
+  const at = others.findIndex(c => c.trim().toLowerCase() === key);
+  const hash = [...key].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  return `var(--cat-${((at >= 0 ? at : hash) % 8) + 1})`;
+}
 export function allocationView(s: AppState, month: string) {
   const sum = summarize(s, month);
+  const cats = billCategories(s);
+  const byCategory = new Map<string, number>();
+  for (const i of sum.items) {
+    if (i.kind !== 'bill') continue;
+    const name = normalizeCategory(s.bills.find(b => b.id === i.refId)?.category ?? '', cats);
+    byCategory.set(name, (byCategory.get(name) ?? 0) + i.amount);
+  }
+  const listed = cats.filter(c => byCategory.has(c));
+  const legacy = [...byCategory.keys()].filter(c => !cats.includes(c)).sort((x, y) => x.localeCompare(y));
   const groups = [
-    { name: 'Dívidas', value: sum.debtInstallments, category: 'divida' },
-    ...['Casa', 'Alimentação', 'Pet', 'Outros'].map((name, index) => ({ name, category: ['casa', 'alim', 'pet', 'outros'][index],
-      value: sum.items.filter(i => i.kind === 'bill' && (() => {
-        const category = s.bills.find(b => b.id === i.refId)?.category.toLowerCase();
-        const group = category === 'moradia' || category === 'casa' ? 'Casa' : category === 'alimentação' || category === 'alim' ? 'Alimentação' : category === 'pet' ? 'Pet' : 'Outros';
-        return group === name;
-      })()).reduce((total, i) => total + i.amount, 0) })),
-    { name: 'Dinheiro livre', value: sum.freeMoney[0] + sum.freeMoney[1], category: 'livre' },
-    { name: 'Poupança', value: Math.max(0, sum.leftover), category: 'poup' },
+    { name: 'Dívidas', value: sum.debtInstallments, category: 'divida', color: 'var(--c-divida)' },
+    ...[...listed, ...legacy].map(name => ({ name, value: byCategory.get(name) ?? 0, category: name.toLowerCase(), color: categoryColor(name, cats) })),
+    { name: 'Dinheiro livre', value: sum.freeMoney[0] + sum.freeMoney[1], category: 'livre', color: 'var(--c-livre)' },
+    { name: 'Poupança', value: Math.max(0, sum.leftover), category: 'poup', color: 'var(--c-poup)' },
   ].filter(g => g.value > 0);
   const total = groups.reduce((value, group) => value + group.value, 0);
   return groups.map(group => ({ ...group, percent: Math.round(group.value / total * 100) }));
