@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState, billCategories, addCategory, renameCategory, removeCategory } from './finance';
-import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks, categoryColor, debtOrigins, filterDebts } from './planning-model';
+import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks, categoryColor, debtOrigins, filterDebts, debtPersonShares } from './planning-model';
 
 describe('Planning models', () => {
   it('preserves savings after reserving the next-month cushion', () => {
@@ -192,14 +192,26 @@ describe('filtrar dívidas por origem e responsável', () => {
   const mk = (id: string, origin: string, person: 0 | 1 | null, splitA?: number) => ({ id, name: id, origin, total: 30000, installments: 3, amount: 10000, paidCount: 0, firstDue: '2026-11-10', person, shared: person === null, ...(splitA !== undefined ? { splitA } : {}) });
   const s = () => { const x = emptyState(['Bianca', 'Julio']); x.debts = [mk('d1', 'Cartão mãe', 0), mk('d2', 'Cartão mãe', 1), mk('d3', 'Cartão mãe', null), mk('d4', 'Banco', 0), mk('d5', 'Cartão mãe', 0, 50)] as typeof x.debts; return x; };
   it('lista as origens', () => expect(debtOrigins(s())).toEqual(['Banco', 'Cartão mãe']));
-  it('Bianca no cartão: as dela e a parte dela nas divididas', () => {
+  it('Bianca no cartão: as dela, a parte dela nas conjuntas e nas divididas', () => {
     const r = filterDebts(s(), month, { origin: 'Cartão mãe', owner: 'a' });
-    expect(r.rows.map(x => x.id)).toEqual(['d1', 'd5']);
-    expect(r.total).toBe(15000);
+    expect(r.rows.map(x => x.id)).toEqual(['d1', 'd3', 'd5']);
+    expect(r.total).toBe(10000 + 5000 + 5000);
   });
   it('Julio no cartão e em conjunto', () => {
-    expect(filterDebts(s(), month, { origin: 'Cartão mãe', owner: 'b' }).rows.map(x => x.id)).toEqual(['d2', 'd5']);
+    expect(filterDebts(s(), month, { origin: 'Cartão mãe', owner: 'b' }).rows.map(x => x.id)).toEqual(['d2', 'd3', 'd5']);
     expect(filterDebts(s(), month, { origin: 'all', owner: 'both' }).rows.map(x => x.id)).toEqual(['d3']);
     expect(filterDebts(s(), month, { origin: 'all', owner: 'all' }).rows).toHaveLength(5);
+  });
+});
+
+describe('debtPersonShares', () => {
+  it('soma individual + metade do conjunto', () => {
+    const x = emptyState(['Bianca', 'Julio']);
+    const mk = (id: string, person: 0 | 1 | null, amount: number) => ({ id, name: id, origin: '', total: amount * 3, installments: 3, amount, paidCount: 0, firstDue: '2026-11-10', person, shared: person === null });
+    x.debts = [mk('a', 0, 5000), mk('b', 1, 10000), mk('j', null, 20000)] as typeof x.debts;
+    const r = debtPersonShares(x, '2026-11');
+    expect(r.people.map(p => [p.individual, p.joint, p.total])).toEqual([[5000, 10000, 15000], [10000, 10000, 20000]]);
+    expect(r.jointTotal).toBe(20000);
+    expect(r.total).toBe(35000);
   });
 });

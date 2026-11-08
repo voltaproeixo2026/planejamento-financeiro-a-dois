@@ -86,8 +86,9 @@ describe('Debt screen totals and installments', () => {
     household.state = state();
     render(<DebtScreen month="2026-10" />);
     const total = (key: string) => document.querySelector(`[data-owner="${key}"]`)?.textContent;
-    expect(total('a')).toContain('50,00'); // R$ 50 por mês, não os R$ 200 do total da dívida
-    expect(total('b')).toContain('100,00');
+    expect(total('a')).toContain('150,00'); // R$ 50 só dela + metade dos R$ 200 em conjunto
+    expect(total('b')).toContain('200,00'); // R$ 100 só dele + metade do conjunto
+    expect(document.querySelector('#debt-owners')!.textContent).toMatch(/Individual: R\$\s50,00 · Metade do conjunto: R\$\s100,00/);
     expect(total('both')).toContain('200,00');
     expect(document.querySelector('#debt-owners')!.textContent).toMatch(/Total do mês: R\$\s350,00/);
     expect(document.querySelector('#debt-owners')!.textContent).not.toContain('falta pagar');

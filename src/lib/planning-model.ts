@@ -247,7 +247,7 @@ export function debtSplit(s: AppState, d: Debt): DebtSplit | null {
 
 export interface DebtFilterRow { id: string; name: string; origin: string; owner: string; installment: number; share: number; label: string }
 export const debtOrigins = (s: AppState): string[] => [...new Set(s.debts.map(d => (d.origin ?? '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'pt-BR'));
-/** Dívidas de um mês filtradas por "onde é a dívida" e por responsável ('all' | 'a' | 'b' | 'both'). Em 'a'/'b' entram as dívidas da pessoa e a parte dela nas divididas por %. */
+/** Dívidas de um mês filtradas por "onde é a dívida" e por responsável ('all' | 'a' | 'b' | 'both'). Em 'a'/'b' somam as dívidas só da pessoa + a parte dela nas conjuntas (pela divisão do casal) e nas divididas por %. */
 export function filterDebts(s: AppState, month: string, f: { origin: string; owner: 'all' | 'a' | 'b' | 'both' }): { rows: DebtFilterRow[]; total: number } {
   const rows: DebtFilterRow[] = [];
   for (const it of summarize(s, month).items) {
@@ -264,7 +264,7 @@ export function filterDebts(s: AppState, month: string, f: { origin: string; own
       share = f.owner === 'a' ? a : f.owner === 'b' ? b : it.amount;
       owner = `${s.names[0]} ${clampPct(d.splitA)}% · ${s.names[1]} ${100 - clampPct(d.splitA)}%`;
     } else if (d.shared || d.person === null) {
-      if (f.owner === 'a' || f.owner === 'b') continue;
+      if (f.owner === 'a' || f.owner === 'b') { const [a, b] = splitAmount(it.amount, clampPct(s.split[0])); share = f.owner === 'a' ? a : b; }
       owner = 'Em conjunto';
     } else {
       if ((f.owner === 'a' && d.person !== 0) || (f.owner === 'b' && d.person !== 1) || f.owner === 'both') continue;
@@ -273,4 +273,15 @@ export function filterDebts(s: AppState, month: string, f: { origin: string; own
     rows.push({ id: d.id, name: it.name, origin, owner, installment: it.amount, share, label: origin || 'Sem origem' });
   }
   return { rows, total: rows.reduce((a, r) => a + r.share, 0) };
+}
+
+export interface PersonDebtShare { key: 'a' | 'b'; name: string; individual: number; joint: number; total: number }
+/** Parcelas do mês de cada pessoa: o que é só dela + a parte dela nas dívidas em conjunto (pela divisão do casal). */
+export function debtPersonShares(s: AppState, month: string): { people: [PersonDebtShare, PersonDebtShare]; jointTotal: number; total: number } {
+  const o = debtOwnerTotals(s, month);
+  const [ja, jb] = splitAmount(o[2]!.monthly, clampPct(s.split[0]));
+  const mk = (key: 'a' | 'b', name: string, individual: number, joint: number): PersonDebtShare => ({ key, name, individual, joint, total: individual + joint });
+  const a = mk('a', s.names[0], o[0]!.monthly, ja);
+  const b = mk('b', s.names[1], o[1]!.monthly, jb);
+  return { people: [a, b], jointTotal: o[2]!.monthly, total: a.total + b.total };
 }
