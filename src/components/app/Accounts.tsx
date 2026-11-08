@@ -19,7 +19,8 @@ function PersonSelect({ value, onChange, allowNone }: { value: string; onChange:
   return <NativeSelect value={value} onChange={(e) => onChange(e.target.value)}>{allowNone && <option value="">Casal (compartilhada)</option>}<option value="0">{s.names[0]}</option><option value="1">{s.names[1]}</option></NativeSelect>;
 }
 
-export function Accounts({ month }: { month: string }) {
+/** Aba Renda: nomes, rendas, extras e dinheiro guardado de meses anteriores. */
+export function Income({ month }: { month: string }) {
   const { s, update } = useAppState();
   return (
     <div className="space-y-6">
@@ -33,6 +34,14 @@ export function Accounts({ month }: { month: string }) {
       <Incomes month={month} />
       <Extras month={month} />
       <Carries month={month} />
+    </div>
+  );
+}
+
+/** Aba Contas: só as contas fixas. */
+export function Accounts({ month }: { month: string }) {
+  return (
+    <div className="space-y-6">
       <Bills month={month} />
     </div>
   );
@@ -221,7 +230,7 @@ function Bills({ month }: { month: string }) {
                   {repeated && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">repetida de {monthLabel(source)}</span>}
                   {last && <span className="ml-2 rounded bg-warning px-1.5 py-0.5 text-xs font-normal text-warning-foreground">última vez</span>}
                 </p>
-                <p className="text-xs text-muted-foreground">{b.category || "Sem categoria"} · vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
+                <p className="text-xs text-muted-foreground">vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <BillValue key={`${b.id}-${month}-${i.amount}`} id={`bill-value-${b.id}`} cents={i.amount} onCommit={(c) => patchBill(b.id, (x) => setBillMonthValue(x, month, c))} />
@@ -230,6 +239,10 @@ function Bills({ month }: { month: string }) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <NativeSelect aria-label={`Categoria de ${b.name}`} className="h-8 w-auto text-xs" value={b.category} onChange={(e) => patchBill(b.id, (x) => ({ ...x, category: e.target.value }))}>
+                {!(BILL_CATEGORIES as readonly string[]).includes(b.category) && <option value={b.category}>{b.category || "Sem categoria"}</option>}
+                {BILL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </NativeSelect>
               <Button size="sm" variant="secondary" onClick={() => repeat(b)}>Repetir em {monthLabel(next)}</Button>
               {!last && <Button size="sm" variant="ghost" onClick={() => { patchBill(b.id, (x) => lastTimeBill(x, month)); toast.success(`${b.name}: última vez em ${monthLabel(month)}.`); }}>Última vez neste mês</Button>}
               <Button size="sm" variant="ghost" onClick={() => setPending({ id: b.id, kind: "stop" })}>Parar a partir deste mês</Button>

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ChartPie, List, CreditCard, Percent, CalendarDays, Target, LogOut, Copy } from "lucide-react";
+import { ChartPie, List, Wallet, CreditCard, Percent, CalendarDays, Target, LogOut, Copy } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { HouseholdProvider, useHousehold } from "@/lib/household";
 import { monthLabel, ym } from "@/lib/finance";
 import { MonthNav } from "@/components/app/ui-bits";
 import { Dashboard } from "@/components/app/Dashboard";
-import { Accounts } from "@/components/app/Accounts";
+import { Accounts, Income } from "@/components/app/Accounts";
 import { DebtScreen } from "@/components/app/DebtScreen";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { Split } from "@/components/app/Split";
@@ -33,6 +33,7 @@ export const Route = createFileRoute("/_authenticated/app")({
 
 const tabs = [
   { id: "inicio", label: "Resumo", icon: ChartPie },
+  { id: "renda", label: "Renda", icon: Wallet },
   { id: "contas", label: "Contas", icon: List },
   { id: "dividas", label: "Dívidas", icon: CreditCard },
   { id: "divisao", label: "Divisão", icon: Percent },
@@ -78,6 +79,7 @@ function AppShell() {
         )}
         <div className="shell-month"><MonthNav month={month} setMonth={setMonth} /></div>
         {tab === "inicio" && <Dashboard month={month} onDebts={() => setTab('dividas')} />}
+        {tab === "renda" && <Income month={month} />}
         {tab === "contas" && <Accounts month={month} />}
         {tab === "dividas" && <DebtScreen month={month} />}
         {tab === "divisao" && <Split month={month} />}

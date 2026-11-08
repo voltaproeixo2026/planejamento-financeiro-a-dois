@@ -5,7 +5,7 @@ import { emptyState, itemsForMonth, type AppState } from '@/lib/finance';
 const household = vi.hoisted(() => ({ state: {} as AppState }));
 vi.mock('@/lib/household', () => ({ useAppState: () => ({ s: household.state, update: (fn: (s: AppState) => AppState) => { household.state = fn(household.state); } }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-import { Accounts } from '@/components/app/Accounts';
+import { Accounts, Income } from '@/components/app/Accounts';
 afterEach(cleanup);
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
 
@@ -76,7 +76,7 @@ describe('Contas fixas por mês', () => {
     expect(household.state.bills[0]).toMatchObject({ start: '2026-10', end: '2026-10', amount: 80000 });
     expect(billsOf('2026-11')).toHaveLength(0);
     cleanup();
-    render(<Accounts month="2026-10" />);
+    render(<Income month="2026-10" />);
     const carryForm = screen.getByPlaceholderText('Guardado para o financiamento').closest('form')!;
     const [desc, value] = Array.from(carryForm.querySelectorAll('input'));
     fireEvent.change(desc!, { target: { value: 'Guardado de setembro' } });
@@ -98,5 +98,36 @@ describe('Contas fixas por mês', () => {
     fireEvent.change(select, { target: { value: 'Entretenimento' } });
     fireEvent.submit(form);
     expect(household.state.bills[0]).toMatchObject({ name: 'Netflix', category: 'Entretenimento' });
+  });
+
+  it('a categoria de uma conta já cadastrada pode ser trocada e vale para todos os meses', () => {
+    setup();
+    render(<Accounts month="2026-10" />);
+    const select = screen.getByLabelText('Categoria de Água') as HTMLSelectElement;
+    expect(select.value).toBe('Casa');
+    fireEvent.change(select, { target: { value: 'Entretenimento' } });
+    expect(household.state.bills[0]?.category).toBe('Entretenimento');
+    expect(household.state.bills[0]).toMatchObject({ name: 'Água', amount: 7000 });
+  });
+
+  it('categoria antiga em texto livre continua aparecendo na lista', () => {
+    setup();
+    household.state.bills[0]!.category = 'Moradia';
+    render(<Accounts month="2026-10" />);
+    const select = screen.getByLabelText('Categoria de Água') as HTMLSelectElement;
+    expect(select.value).toBe('Moradia');
+  });
+
+  it('a aba Contas não tem mais rendas, extras nem guardado; eles ficam na aba Renda', () => {
+    setup();
+    const contas = render(<Accounts month="2026-10" />);
+    expect(screen.queryByText('Quem somos')).toBeNull();
+    expect(screen.queryByText('Guardado de meses anteriores')).toBeNull();
+    expect(screen.getByText('Contas fixas')).toBeTruthy();
+    contas.unmount();
+    render(<Income month="2026-10" />);
+    expect(screen.getByText('Quem somos')).toBeTruthy();
+    expect(screen.getByText('Guardado de meses anteriores')).toBeTruthy();
+    expect(screen.queryByText('Contas fixas')).toBeNull();
   });
 });
