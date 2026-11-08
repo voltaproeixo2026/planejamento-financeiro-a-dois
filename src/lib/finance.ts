@@ -446,3 +446,20 @@ export function exampleState(today = new Date()): AppState {
 export function emptyState(names: [string, string]): AppState {
   return { names, incomes: [], extras: [], bills: [], debts: [], split: [50, 50], weeklyFree: [0, 0], freeWeekday: 1, cushion: {}, transfers: [], savedReal: 0, isExample: false };
 }
+
+/** Total das contas fixas de uma categoria no mês; as compartilhadas (sem divisão personalizada) também aparecem divididas por 2. */
+export function categoryMonthTotals(s: AppState, month: string, category: string) {
+  const cats = billCategories(s);
+  const want = normalizeCategory(category, cats).toLowerCase();
+  let total = 0, shared = 0, individual = 0, custom = 0;
+  for (const i of itemsForMonth(s, month)) {
+    if (i.kind !== "bill") continue;
+    const b = s.bills.find((x) => x.id === i.refId);
+    if (!b || normalizeCategory(b.category, cats).toLowerCase() !== want) continue;
+    total += i.amount;
+    if (i.splitA !== undefined) custom += i.amount;
+    else if (i.shared) shared += i.amount;
+    else individual += i.amount;
+  }
+  return { total, shared, half: Math.round(shared / 2), individual, custom };
+}

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAppState } from "@/lib/household";
-import { BRL, addCategory, addMonths, billCategories, removeCategory, renameCategory, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
+import { BRL, categoryMonthTotals, addCategory, addMonths, billCategories, removeCategory, renameCategory, payerLabel, billActive, billValueMonth, debtSummary, fmtDate, incomeReceipts, itemsForMonth, lastTimeBill, monthLabel, repeatBill, setBillMonthValue, stopBillFrom, toCents, uid, type Bill, type Freq, type Person } from "@/lib/finance";
 import { Empty, NativeSelect, Section, Status } from "./ui-bits";
 import { togglePaid } from "./Dashboard";
 
@@ -86,9 +86,25 @@ function Categories() {
 export function Accounts({ month }: { month: string }) {
   return (
     <div className="space-y-6">
+      <CasaTotal month={month} />
       <Bills month={month} />
       <Categories />
     </div>
+  );
+}
+
+function CasaTotal({ month }: { month: string }) {
+  const { s } = useAppState();
+  const c = categoryMonthTotals(s, month, "Casa");
+  return (
+    <Section title="Contas da casa" desc={`Total das contas da categoria Casa em ${monthLabel(month)}.`}>
+      <dl id="casa-total" className="grid gap-4 sm:grid-cols-3">
+        <div><dt className="text-sm text-muted-foreground">Total da casa</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{BRL(c.total)}</dd></div>
+        <div><dt className="text-sm text-muted-foreground">Compartilhadas</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{BRL(c.shared)}</dd></div>
+        <div><dt className="text-sm text-muted-foreground">Dividido em 2 (cada um)</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{BRL(c.half)}</dd></div>
+      </dl>
+      {(c.individual > 0 || c.custom > 0) && <p className="mt-3 text-xs text-muted-foreground">{c.individual > 0 ? `Individuais: ${BRL(c.individual)}. ` : ""}{c.custom > 0 ? `Com divisão personalizada: ${BRL(c.custom)}.` : ""}</p>}
+    </Section>
   );
 }
 
@@ -275,7 +291,7 @@ function Bills({ month }: { month: string }) {
                   {repeated && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">repetida de {monthLabel(source)}</span>}
                   {last && <span className="ml-2 rounded bg-warning px-1.5 py-0.5 text-xs font-normal text-warning-foreground">última vez</span>}
                 </p>
-                <p className="text-xs text-muted-foreground">vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? "Compartilhada" : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
+                <p className="text-xs text-muted-foreground">vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? `Compartilhada · metade ${BRL(Math.round(i.amount / 2))}` : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <BillValue key={`${b.id}-${month}-${i.amount}`} id={`bill-value-${b.id}`} cents={i.amount} onCommit={(c) => patchBill(b.id, (x) => setBillMonthValue(x, month, c))} />

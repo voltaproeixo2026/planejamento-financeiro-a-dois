@@ -162,3 +162,13 @@ describe("dinheiro guardado de meses anteriores", () => {
     expect(com.needTransfer[0] + com.needTransfer[1]).toBe(sem.needTransfer[0] + sem.needTransfer[1] - 80000);
   });
 });
+
+import { categoryMonthTotals as _cmt } from './finance';
+describe('total da categoria Casa', () => {
+  it('soma a categoria e divide as compartilhadas em 2', () => {
+    const s = emptyState(['A', 'B']);
+    const b = (id: string, category: string, amount: number, shared: boolean) => ({ id, name: id, category, amount, day: 5, person: shared ? null : 0, shared, start: '2026-11', paid: {} });
+    s.bills = [b('1', 'Casa', 100000, true), b('2', 'Moradia', 30000, true), b('3', 'Casa', 20000, false), b('4', 'Pet', 9999, true)] as typeof s.bills;
+    expect(_cmt(s, '2026-11', 'Casa')).toEqual({ total: 150000, shared: 130000, half: 65000, individual: 20000, custom: 0 });
+  });
+});
