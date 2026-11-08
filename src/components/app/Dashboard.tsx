@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
 import { addMonths, alerts, BRL, fmtDate, monthLabel, payerLabel, summarize, type AppState, type Item } from '@/lib/finance';
-import { allocationView, debtHomeView, debtTotals } from '@/lib/planning-model';
+import { allocationView } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { Report } from './Report';
 
@@ -66,8 +66,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
   const paidItems = sum.items.filter(i => i.paid);
   const paidRows = groupRows(s, paidItems);
   const allocation = allocationView(s, month);
-  const totals = debtTotals(s, month);
-  const debts = debtHomeView(s, month);
   return <div className="space-y-6">
     <section id="hello" className="rounded-2xl border bg-card p-5 md:p-6">
       <h1 className="text-3xl">Boa noite, casal</h1>
@@ -88,10 +86,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
     </Section>
     <Section title="Para onde vai a renda">
       {allocation.length ? <><div id="bar" role="img" aria-label="Divisão da renda mensal por categoria" className="summary-income-bar">{allocation.map(g => <i key={g.name} className="summary-category" data-category={g.category} style={{ flexGrow: g.value }} title={`${g.name}: ${BRL(g.value)} (${g.percent}%)`} />)}</div><ul id="legend" className="summary-income-legend">{allocation.map(g => <li key={g.name}><span className="summary-category summary-swatch" data-category={g.category} /><span>{g.name}</span><b className="tabular-nums">{BRL(g.value)}</b><span className="summary-percent tabular-nums">{g.percent}%</span></li>)}</ul></> : <><div id="bar" /><ul id="legend"><li><Empty>Cadastre rendas e contas para ver a distribuição.</Empty></li></ul></>}
-    </Section>
-    <Section title="Dívidas">
-      <ul id="debt-home" className="summary-debts divide-y">{debts.length ? debts.map(d => <li key={d.id}><div className="min-w-0"><b>{d.name}{d.origin && ` · ${d.origin}`}</b><p className="mt-1 text-sm text-muted-foreground">Responsável: {d.owner}</p>{d.split && <p className="mt-1 text-sm">Parcela {BRL(d.amount)}: {s.names[0]} {BRL(d.split.installment[0])} · {s.names[1]} {BRL(d.split.installment[1])}</p>}<p className="mt-1 text-sm text-muted-foreground">{d.status === 'done' ? 'Quitada.' : d.status === 'future' ? `Começa em ${monthLabel(d.firstMonth)}. Ainda não entra nas contas deste mês.` : <>Parcela {d.current} de {d.installments} neste mês. Restam {d.left} (com esta): {BRL(d.remaining)}. Última em {monthLabel(d.lastMonth)}.</>}</p></div><div className="summary-debt-total"><b className="tabular-nums">{BRL(d.total)}</b><span className="block text-xs text-muted-foreground">total da dívida</span>{d.split && <span className="mt-1 block text-xs text-muted-foreground">{s.names[0]} {BRL(d.split.total[0])}<br />{s.names[1]} {BRL(d.split.total[1])}</span>}</div></li>) : <li><Empty>Nenhuma dívida cadastrada. Adicione na aba Dívidas.</Empty></li>}</ul>
-      <div className="mt-4 flex flex-wrap justify-between gap-2 border-t pt-4"><span>Falta pagar no total</span><b>{BRL(totals.remaining)}</b></div>
     </Section>
     <Section title="Pontos de atenção"><ul id="alerts" className="space-y-2">{attention.length ? attention.map((a, k) => <li key={k} className="flex gap-2 rounded-lg bg-muted p-3 text-sm">{a.level === 'danger' ? <OctagonAlert className="h-4 w-4 shrink-0 text-destructive" /> : a.level === 'warn' ? <AlertTriangle className="h-4 w-4 shrink-0 text-warning" /> : <Info className="h-4 w-4 shrink-0 text-primary" />}{a.text}</li>) : <li><Empty>Tudo tranquilo por aqui.</Empty></li>}</ul></Section>
     <Report month={month} />
