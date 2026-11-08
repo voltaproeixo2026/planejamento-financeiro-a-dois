@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState, billCategories, addCategory, renameCategory, removeCategory } from './finance';
-import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks, categoryColor } from './planning-model';
+import { goalView, goalMonthsAt, reserveView, savingsView, debtTotals, allocationView, debtHomeView, incomeScenarioControl, incomeScenarioView, flowDays, niceTicks, categoryColor, debtOrigins, filterDebts } from './planning-model';
 
 describe('Planning models', () => {
   it('preserves savings after reserving the next-month cushion', () => {
@@ -184,5 +184,22 @@ describe('editar categorias', () => {
     expect(billCategories(s)).not.toContain('Pet');
     expect(s.bills.map(b => b.category)).toEqual(['Casa', 'Outros']);
     expect(removeCategory(s, 'Outros')).toBe(s);
+  });
+});
+
+describe('filtrar dívidas por origem e responsável', () => {
+  const month = '2026-11';
+  const mk = (id: string, origin: string, person: 0 | 1 | null, splitA?: number) => ({ id, name: id, origin, total: 30000, installments: 3, amount: 10000, paidCount: 0, firstDue: '2026-11-10', person, shared: person === null, ...(splitA !== undefined ? { splitA } : {}) });
+  const s = () => { const x = emptyState(['Bianca', 'Julio']); x.debts = [mk('d1', 'Cartão mãe', 0), mk('d2', 'Cartão mãe', 1), mk('d3', 'Cartão mãe', null), mk('d4', 'Banco', 0), mk('d5', 'Cartão mãe', 0, 50)] as typeof x.debts; return x; };
+  it('lista as origens', () => expect(debtOrigins(s())).toEqual(['Banco', 'Cartão mãe']));
+  it('Bianca no cartão: as dela e a parte dela nas divididas', () => {
+    const r = filterDebts(s(), month, { origin: 'Cartão mãe', owner: 'a' });
+    expect(r.rows.map(x => x.id)).toEqual(['d1', 'd5']);
+    expect(r.total).toBe(15000);
+  });
+  it('Julio no cartão e em conjunto', () => {
+    expect(filterDebts(s(), month, { origin: 'Cartão mãe', owner: 'b' }).rows.map(x => x.id)).toEqual(['d2', 'd5']);
+    expect(filterDebts(s(), month, { origin: 'all', owner: 'both' }).rows.map(x => x.id)).toEqual(['d3']);
+    expect(filterDebts(s(), month, { origin: 'all', owner: 'all' }).rows).toHaveLength(5);
   });
 });

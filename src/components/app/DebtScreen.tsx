@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppState } from '@/lib/household';
 import { BRL, debtChanges, fmtDate, forecast, monthLabel, payerLabel, summarize } from '@/lib/finance';
-import { debtOwnerTotals, debtSplit, debtTotals } from '@/lib/planning-model';
+import { debtOrigins, debtOwnerTotals, debtSplit, debtTotals, filterDebts } from '@/lib/planning-model';
 import { Button } from '@/components/ui/button';
 import { DebtEditor } from './DebtEditor';
 import { canToggle, togglePaid } from './Dashboard';
@@ -10,10 +10,14 @@ import { Status } from './ui-bits';
 export function DebtScreen({ month }: { month: string }) {
   const { s, update } = useAppState();
   const [range, setRange] = useState(3);
+  const [fOrigin, setFOrigin] = useState('all');
+  const [fOwner, setFOwner] = useState<'all' | 'a' | 'b' | 'both'>('all');
   const totals = debtTotals(s, month);
   const owners = debtOwnerTotals(s, month);
   const installments = summarize(s, month).items.filter(i => i.kind === 'debt');
   const today = new Date().toISOString().slice(0, 10);
+  const origins = debtOrigins(s);
+  const filtered = filterDebts(s, month, { origin: fOrigin, owner: fOwner });
   const rows = forecast(s, month, range);
   const changes = debtChanges(s, month, range);
   return <div className="debt-screen space-y-6">
@@ -26,6 +30,15 @@ export function DebtScreen({ month }: { month: string }) {
         <p className="text-xs text-muted-foreground">em parcelas neste mês</p>
       </div>)}</div>
       <p className="mt-2 text-sm text-muted-foreground">Total do mês: <b>{BRL(owners.reduce((a, o) => a + o.monthly, 0))}</b>. Só as parcelas de {monthLabel(month)}. Dívidas marcadas como "Os dois" ficam em conjunto.</p>
+    </section>
+    <section id="debt-filter" aria-label="Filtrar dívidas">
+      <h2 className="mb-2 text-xl">Filtrar dívidas</h2>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">Onde é a dívida<select aria-label="Onde é a dívida" className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={fOrigin} onChange={e => setFOrigin(e.target.value)}><option value="all">Todas</option>{origins.map(o => <option key={o} value={o}>{o}</option>)}</select></label>
+        <label className="text-sm">Responsável<select aria-label="Responsável" className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={fOwner} onChange={e => setFOwner(e.target.value as 'all' | 'a' | 'b' | 'both')}><option value="all">Todos</option><option value="a">{s.names[0]}</option><option value="b">{s.names[1]}</option><option value="both">Em conjunto</option></select></label>
+      </div>
+      {filtered.rows.length ? <ul className="divide-y">{filtered.rows.map(r => <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.label} · {r.owner}</p></div><b className="tabular-nums">{BRL(r.share)}</b></li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela com esse filtro em {monthLabel(month)}.</p>}
+      <p id="debt-filter-total" className="mt-2 text-sm text-muted-foreground">Total em {monthLabel(month)}: <b>{BRL(filtered.total)}</b>{fOwner === 'a' || fOwner === 'b' ? ` (a parte de ${s.names[fOwner === 'a' ? 0 : 1]}, inclusive nas dívidas divididas)` : ''}</p>
     </section>
     <section id="debt-month-list" aria-label="Parcelas do mês">
       <h2 className="mb-2 text-xl">Parcelas de {monthLabel(month)}</h2>

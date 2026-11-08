@@ -244,3 +244,33 @@ export function debtSplit(s: AppState, d: Debt): DebtSplit | null {
   const pctA = d.splitA !== undefined ? clampPct(d.splitA) : s.split[0];
   return { pctA, installment: splitAmount(d.amount, pctA), total: splitAmount(d.amount * d.installments, pctA), remaining: splitAmount(debtSummary(d).remaining, pctA) };
 }
+
+export interface DebtFilterRow { id: string; name: string; origin: string; owner: string; installment: number; share: number; label: string }
+export const debtOrigins = (s: AppState): string[] => [...new Set(s.debts.map(d => (d.origin ?? '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'pt-BR'));
+/** Dívidas de um mês filtradas por "onde é a dívida" e por responsável ('all' | 'a' | 'b' | 'both'). Em 'a'/'b' entram as dívidas da pessoa e a parte dela nas divididas por %. */
+export function filterDebts(s: AppState, month: string, f: { origin: string; owner: 'all' | 'a' | 'b' | 'both' }): { rows: DebtFilterRow[]; total: number } {
+  const rows: DebtFilterRow[] = [];
+  for (const it of summarize(s, month).items) {
+    if (it.kind !== 'debt') continue;
+    const d = s.debts.find(x => x.id === it.refId);
+    if (!d) continue;
+    const origin = (d.origin ?? '').trim();
+    if (f.origin !== 'all' && origin !== f.origin) continue;
+    let share = it.amount;
+    let owner: string;
+    if (d.splitA !== undefined) {
+      const [a, b] = splitAmount(it.amount, clampPct(d.splitA));
+      if (f.owner === 'both') continue;
+      share = f.owner === 'a' ? a : f.owner === 'b' ? b : it.amount;
+      owner = `${s.names[0]} ${clampPct(d.splitA)}% · ${s.names[1]} ${100 - clampPct(d.splitA)}%`;
+    } else if (d.shared || d.person === null) {
+      if (f.owner === 'a' || f.owner === 'b') continue;
+      owner = 'Em conjunto';
+    } else {
+      if ((f.owner === 'a' && d.person !== 0) || (f.owner === 'b' && d.person !== 1) || f.owner === 'both') continue;
+      owner = s.names[d.person];
+    }
+    rows.push({ id: d.id, name: it.name, origin, owner, installment: it.amount, share, label: origin || 'Sem origem' });
+  }
+  return { rows, total: rows.reduce((a, r) => a + r.share, 0) };
+}
