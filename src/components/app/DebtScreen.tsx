@@ -4,7 +4,7 @@ import { BRL, debtChanges, fmtDate, forecast, monthLabel, payerLabel, summarize 
 import { debtOrigins, debtPersonShares, debtSplit, debtTotals, filterDebts } from '@/lib/planning-model';
 import { Button } from '@/components/ui/button';
 import { DebtEditor } from './DebtEditor';
-import { canToggle, togglePaid } from './Dashboard';
+import { canToggle, groupRows, togglePaid } from './Dashboard';
 import { Status } from './ui-bits';
 
 export function DebtScreen({ month }: { month: string }) {
@@ -47,7 +47,14 @@ export function DebtScreen({ month }: { month: string }) {
     </section>
     <section id="debt-month-list" aria-label="Parcelas do mês">
       <h2 className="mb-2 text-xl">Parcelas de {monthLabel(month)}</h2>
-      {installments.length ? <ul className="divide-y">{installments.map(i => <li key={i.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{fmtDate(i.date)} · {payerLabel(s.names, i, 'Em conjunto')}</p>{(() => { const d = s.debts.find(x => x.id === i.refId); const sp = d && debtSplit(s, d); return sp ? <p className="text-xs text-muted-foreground">{s.names[0]} {BRL(sp.installment[0])} · {s.names[1]} {BRL(sp.installment[1])}</p> : null; })()}</div><div className="flex flex-wrap items-center gap-2"><b className="tabular-nums">{BRL(i.amount)}</b><Status paid={i.paid} overdue={i.date < today} /><Button size="sm" variant="outline" disabled={!canToggle(s, i)} title={canToggle(s, i) ? undefined : 'Desfaça primeiro a parcela paga mais recente'} onClick={() => togglePaid(update, i, month, s)}>{i.paid ? 'Desfazer' : 'Pagar'}</Button></div></li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela neste mês.</p>}
+      {installments.length ? <ul className="divide-y">{groupRows(s, installments).map(r => {
+        const allPaid = r.items.every(i => i.paid);
+        const undoable = r.items.filter(i => i.paid && canToggle(s, i));
+        const single = r.items.length === 1 && !r.key.startsWith('origin-') ? r.items[0]! : null;
+        const sp = single ? (() => { const d = s.debts.find(x => x.id === single.refId); return d && debtSplit(s, d); })() : null;
+        const blocked = allPaid && !undoable.length;
+        return <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{fmtDate(r.date)} · {single ? payerLabel(s.names, single, 'Em conjunto') : r.who === 'Compartilhada' ? 'Em conjunto' : r.who}</p>{sp ? <p className="text-xs text-muted-foreground">{s.names[0]} {BRL(sp.installment[0])} · {s.names[1]} {BRL(sp.installment[1])}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><b className="tabular-nums">{BRL(r.amount)}</b><Status paid={allPaid} overdue={r.date < today} /><Button size="sm" variant="outline" disabled={blocked} title={blocked ? 'Desfaça primeiro a parcela paga mais recente' : undefined} onClick={() => (allPaid ? undoable : r.items.filter(i => !i.paid)).forEach(i => togglePaid(update, i, month, s))}>{allPaid ? 'Desfazer' : 'Pagar'}</Button></div></li>;
+      })}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela neste mês.</p>}
     </section>
     <section>
       <h2 className="mb-4 text-xl">Próximos meses</h2>

@@ -122,3 +122,24 @@ describe('Dívida em conjunto na tela', () => {
   });
 });
 
+
+describe('Parcelas do mês agrupadas por "onde é a dívida"', () => {
+  it('mostra o cartão com o total e paga todas as parcelas dele de uma vez', () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    const mk = (id: string, origin: string, amount: number): Debt => ({ ...newDebt('2026-10'), id, name: id, origin, amount, installments: 4, total: amount * 4, ref: 1, ref_ym: '2026-10', firstDue: '2026-10-10', shared: false, person: 0 });
+    s.debts = [mk('tv', 'Cartão mãe', 10000), mk('sofa', 'Cartão mãe', 5000), mk('carro', '', 20000)];
+    household.state = s;
+    const view = render(<DebtScreen month="2026-10" />);
+    const list = () => document.querySelector('#debt-month-list')!;
+    expect(list().querySelectorAll('li')).toHaveLength(2);
+    expect(list().textContent).toContain('Cartão mãe');
+    expect(list().textContent).toMatch(/R\$\s150,00/);
+    expect(list().textContent).not.toContain('tv');
+    fireEvent.click(list().querySelectorAll('button')[0]!);
+    expect(household.state.debts.filter(d => d.paidCount === 1).map(d => d.id).sort()).toEqual(['sofa', 'tv']);
+    view.rerender(<DebtScreen month="2026-10" />);
+    expect(list().querySelectorAll('li')[0]!.textContent).toContain('Desfazer');
+    fireEvent.click(list().querySelectorAll('button')[0]!);
+    expect(household.state.debts.every(d => d.paidCount === 0)).toBe(true);
+  });
+});
