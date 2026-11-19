@@ -143,3 +143,21 @@ describe('Parcelas do mês agrupadas por "onde é a dívida"', () => {
     expect(household.state.debts.every(d => d.paidCount === 0)).toBe(true);
   });
 });
+
+describe('Assinaturas dentro do cartão', () => {
+  it('a conta fixa com o mesmo "onde é" entra no total e no pagamento do cartão', () => {
+    const s = emptyState(['Bianca', 'Julio']);
+    s.debts = [{ ...newDebt('2026-10'), id: 'tv', name: 'TV', origin: 'Cartão mãe', amount: 10000, installments: 4, total: 40000, ref: 1, ref_ym: '2026-10', firstDue: '2026-10-10', shared: false, person: 0 }];
+    s.bills = [{ id: 'net', name: 'Streaming', category: 'Assinaturas', amount: 5000, day: 12, person: 0, shared: false, start: '2026-10', paid: {}, origin: 'Cartão mãe' }, { id: 'luz', name: 'Luz', category: 'Casa', amount: 9000, day: 5, person: null, shared: true, start: '2026-10', paid: {} }];
+    household.state = s;
+    render(<DebtScreen month="2026-10" />);
+    const list = document.querySelector('#debt-month-list')!;
+    expect(list.querySelectorAll('li')).toHaveLength(1);
+    expect(list.textContent).toContain('Cartão mãe');
+    expect(list.textContent).toMatch(/R\$\s150,00/);
+    fireEvent.click(list.querySelector('button')!);
+    expect(household.state.debts[0]!.paidCount).toBe(1);
+    expect(household.state.bills.find(b => b.id === 'net')!.paid['2026-10']).toBe(true);
+    expect(household.state.bills.find(b => b.id === 'luz')!.paid['2026-10']).toBeUndefined();
+  });
+});

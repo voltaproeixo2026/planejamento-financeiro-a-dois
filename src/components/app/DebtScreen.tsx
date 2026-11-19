@@ -14,7 +14,7 @@ export function DebtScreen({ month }: { month: string }) {
   const [fOwner, setFOwner] = useState<'all' | 'a' | 'b' | 'both'>('all');
   const totals = debtTotals(s, month);
   const shares = debtPersonShares(s, month);
-  const installments = summarize(s, month).items.filter(i => i.kind === 'debt');
+  const installments = summarize(s, month).items.filter(i => i.kind === 'debt' || !!i.origin);
   const today = new Date().toISOString().slice(0, 10);
   const origins = debtOrigins(s);
   const filtered = filterDebts(s, month, { origin: fOrigin, owner: fOwner });

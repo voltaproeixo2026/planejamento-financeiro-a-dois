@@ -1,8 +1,7 @@
-import { AlertTriangle, Info, OctagonAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAppState } from '@/lib/household';
-import { addMonths, alerts, BRL, fmtDate, monthLabel, payerLabel, summarize, type AppState, type Item } from '@/lib/finance';
+import { addMonths, BRL, fmtDate, monthLabel, payerLabel, summarize, type AppState, type Item } from '@/lib/finance';
 import { allocationView } from '@/lib/planning-model';
 import { Empty, Section, Status } from './ui-bits';
 import { Report } from './Report';
@@ -41,8 +40,7 @@ export function groupRows(s: AppState, items: Item[]): Row[] {
   const rows: Row[] = [];
   const byOrigin = new Map<string, Row>();
   for (const i of items) {
-    const d = i.kind === 'debt' ? s.debts.find(x => x.id === i.refId) : undefined;
-    const origin = d?.origin?.trim();
+    const origin = i.origin?.trim();
     if (!origin) { rows.push({ key: i.key, name: i.name, date: i.date, amount: i.amount, items: [i], who: payerLabel(s.names, i) }); continue; }
     const k = origin.toLowerCase();
     let r = byOrigin.get(k);
@@ -61,7 +59,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
   const today = new Date().toISOString().slice(0, 10);
   const sum = summarize(s, month, { today });
   const next = summarize(s, addMonths(month, 1), { today });
-  const attention = alerts(s, month, today);
   const upcoming = groupRows(s, sum.items.filter(i => !i.paid)).slice(0, 6);
   const paidItems = sum.items.filter(i => i.paid);
   const paidRows = groupRows(s, paidItems);
@@ -87,7 +84,6 @@ export function Dashboard({ month, onDebts }: { month: string; onDebts?: () => v
     <Section title="Para onde vai a renda">
       {allocation.length ? <><div id="bar" role="img" aria-label="Divisão da renda mensal por categoria" className="summary-income-bar">{allocation.map(g => <i key={g.name} className="summary-category" data-category={g.category} style={{ flexGrow: g.value, background: g.color }} title={`${g.name}: ${BRL(g.value)} (${g.percent}%)`} />)}</div><ul id="legend" className="summary-income-legend">{allocation.map(g => <li key={g.name}><span className="summary-category summary-swatch" data-category={g.category} style={{ background: g.color }} /><span>{g.name}</span><b className="tabular-nums">{BRL(g.value)}</b><span className="summary-percent tabular-nums">{g.percent}%</span></li>)}</ul></> : <><div id="bar" /><ul id="legend"><li><Empty>Cadastre rendas e contas para ver a distribuição.</Empty></li></ul></>}
     </Section>
-    <Section title="Pontos de atenção"><ul id="alerts" className="space-y-2">{attention.length ? attention.map((a, k) => <li key={k} className="flex gap-2 rounded-lg bg-muted p-3 text-sm">{a.level === 'danger' ? <OctagonAlert className="h-4 w-4 shrink-0 text-destructive" /> : a.level === 'warn' ? <AlertTriangle className="h-4 w-4 shrink-0 text-warning" /> : <Info className="h-4 w-4 shrink-0 text-primary" />}{a.text}</li>) : <li><Empty>Tudo tranquilo por aqui.</Empty></li>}</ul></Section>
     <Report month={month} />
   </div>;
 }

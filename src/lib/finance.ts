@@ -22,6 +22,8 @@ export interface Bill {
   values?: Record<string, number> | undefined;
   /** Own split: percent of this bill paid by the first person (0-100); the rest is the second person's. Each pays their part directly. */
   splitA?: number | undefined;
+  /** Opcional: "onde é" a conta, por exemplo "Cartão mãe" (assinaturas que fazem parte da fatura de um cartão). */
+  origin?: string | undefined;
 }
 export interface Debt {
   id: string; name: string; total: number; installments: number; amount: number;
@@ -110,7 +112,7 @@ export function incomeReceipts(inc: Income, m: string, factor = 1) {
 
 export interface Item {
   key: string; kind: "bill" | "debt"; refId: string; name: string; date: string;
-  amount: number; paid: boolean; shared: boolean; person: Person | null; installment?: number; splitA?: number | undefined;
+  amount: number; paid: boolean; shared: boolean; person: Person | null; installment?: number; splitA?: number | undefined; origin?: string | undefined;
 }
 
 export function debtInstallment(d: Debt, m: string) {
@@ -235,12 +237,12 @@ export function itemsForMonth(s: AppState, m: string): Item[] {
   const items: Item[] = [];
   for (const b of s.bills) {
     if (!billActive(b, m)) continue;
-    items.push({ key: `b-${b.id}-${m}`, kind: "bill", refId: b.id, name: b.name, date: iso(m, b.day), amount: billAmount(b, m), paid: !!b.paid[m], ...payerOf(b) });
+    items.push({ key: `b-${b.id}-${m}`, kind: "bill", refId: b.id, name: b.name, date: iso(m, b.day), amount: billAmount(b, m), paid: !!b.paid[m], origin: b.origin?.trim() || undefined, ...payerOf(b) });
   }
   for (const d of s.debts) {
     const i = debtInstallment(d, m);
     if (!i) continue;
-    items.push({ key: `d-${d.id}-${m}`, kind: "debt", refId: d.id, name: `${d.name} (${i.index + 1}/${d.installments})`, date: i.date, amount: i.amount, paid: i.paid, installment: i.index, ...payerOf(d) });
+    items.push({ key: `d-${d.id}-${m}`, kind: "debt", refId: d.id, name: `${d.name} (${i.index + 1}/${d.installments})`, date: i.date, amount: i.amount, paid: i.paid, installment: i.index, origin: d.origin?.trim() || undefined, ...payerOf(d) });
   }
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }

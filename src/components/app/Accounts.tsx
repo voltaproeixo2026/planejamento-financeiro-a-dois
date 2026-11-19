@@ -228,16 +228,17 @@ type Pending = { id: string; kind: "stop" | "delete" } | null;
 function Bills({ month }: { month: string }) {
   const { s, update } = useAppState();
   const today = new Date().toISOString().slice(0, 10);
-  const [f, setF] = useState({ name: "", category: billCategories(s)[0] ?? "Casa", amount: "", day: "10", person: "", once: false });
+  const [f, setF] = useState({ name: "", category: billCategories(s)[0] ?? "Casa", amount: "", day: "10", person: "", once: false, origin: "" });
   const [dup, setDup] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const items = itemsForMonth(s, month).filter((i) => i.kind === "bill");
+  const origins = [...new Set([...s.debts.map((d) => d.origin?.trim() ?? ""), ...s.bills.map((b) => b.origin?.trim() ?? "")].filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const next = addMonths(month, 1);
   const patchBill = (id: string, fn: (b: Bill) => Bill) => update((st) => ({ ...st, bills: st.bills.map((b) => (b.id === id ? fn(b) : b)) }));
 
   const create = () => {
     const amount = toCents(f.amount), day = Number(f.day);
-    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", start: month, ...(f.once ? { end: month } : {}), paid: {} }] }));
+    update((st) => ({ ...st, bills: [...st.bills, { id: uid(), name: f.name.trim(), category: f.category, amount, day, person: f.person === "" ? null : (Number(f.person) as Person), shared: f.person === "", ...(f.origin ? { origin: f.origin } : {}), start: month, ...(f.once ? { end: month } : {}), paid: {} }] }));
     setF({ ...f, name: "", amount: "" }); setDup(false); toast.success(f.once ? `Conta lançada só em ${monthLabel(month)}.` : `Conta adicionada em ${monthLabel(month)}. Ela se repete nos meses seguintes.`);
   };
   const add = (e: React.FormEvent) => {
@@ -262,12 +263,13 @@ function Bills({ month }: { month: string }) {
   return (
     <Section title="Contas fixas" desc={`Mostrando ${monthLabel(month)}. Toda conta se repete nos meses seguintes com o último valor, e você muda o valor só do mês em que ele mudar.`}
       action={items.length ? <Button size="sm" variant="outline" onClick={repeatAll}>Repetir todas em {monthLabel(next)}</Button> : undefined}>
-      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-8">
+      <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-9">
         <F label="Nome"><Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDup(false); }} /></F>
         <F label="Categoria"><NativeSelect aria-label="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{billCategories(s).map((c) => <option key={c} value={c}>{c}</option>)}</NativeSelect></F>
         <F label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></F>
         <F label="Vencimento (dia)"><Input type="number" min="1" max="31" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} /></F>
         <F label="De quem"><PersonSelect allowNone value={f.person} onChange={(v) => setF({ ...f, person: v })} /></F>
+        <F label="No cartão / onde é"><NativeSelect aria-label="No cartão / onde é" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })}><option value="">Nenhum</option>{origins.map((o) => <option key={o} value={o}>{o}</option>)}</NativeSelect></F>
         <F label="Começa em"><Input readOnly value={monthLabel(month)} className="capitalize" aria-label="Mês de início" /></F>
         <F label="Repete?"><NativeSelect aria-label="Repete?" value={f.once ? "once" : "always"} onChange={(e) => setF({ ...f, once: e.target.value === "once" })}><option value="always">Todo mês</option><option value="once">Só neste mês</option></NativeSelect></F>
         <div className="flex items-end"><Button type="submit" className="w-full">Adicionar</Button></div>
@@ -291,7 +293,7 @@ function Bills({ month }: { month: string }) {
                   {repeated && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">repetida de {monthLabel(source)}</span>}
                   {last && <span className="ml-2 rounded bg-warning px-1.5 py-0.5 text-xs font-normal text-warning-foreground">última vez</span>}
                 </p>
-                <p className="text-xs text-muted-foreground">vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? `Compartilhada · metade ${BRL(Math.round(i.amount / 2))}` : `Individual de ${s.names[i.person ?? 0]}`}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
+                <p className="text-xs text-muted-foreground">vence {fmtDate(i.date)} · {i.splitA !== undefined ? `Dividida: ${payerLabel(s.names, i)}` : i.shared ? `Compartilhada · metade ${BRL(Math.round(i.amount / 2))}` : `Individual de ${s.names[i.person ?? 0]}`}{b.origin ? ` · faz parte de ${b.origin}` : ""}{b.end && !last ? ` · até ${monthLabel(b.end)}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <BillValue key={`${b.id}-${month}-${i.amount}`} id={`bill-value-${b.id}`} cents={i.amount} onCommit={(c) => patchBill(b.id, (x) => setBillMonthValue(x, month, c))} />
@@ -304,6 +306,10 @@ function Bills({ month }: { month: string }) {
                 {!billCategories(s).includes(b.category) && <option value={b.category}>{b.category || "Sem categoria"}</option>}
                 {billCategories(s).map((c) => <option key={c} value={c}>{c}</option>)}
               </NativeSelect>
+              {origins.length > 0 && <NativeSelect aria-label={`No cartão de ${b.name}`} className="h-8 w-auto text-xs" value={b.origin ?? ""} onChange={(e) => patchBill(b.id, (x) => ({ ...x, origin: e.target.value || undefined }))}>
+                <option value="">Fora de cartão</option>
+                {origins.map((o) => <option key={o} value={o}>No {o}</option>)}
+              </NativeSelect>}
               <Button size="sm" variant="secondary" onClick={() => repeat(b)}>Repetir em {monthLabel(next)}</Button>
               {!last && <Button size="sm" variant="ghost" onClick={() => { patchBill(b.id, (x) => lastTimeBill(x, month)); toast.success(`${b.name}: última vez em ${monthLabel(month)}.`); }}>Última vez neste mês</Button>}
               <Button size="sm" variant="ghost" onClick={() => setPending({ id: b.id, kind: "stop" })}>Parar a partir deste mês</Button>
