@@ -261,3 +261,11 @@
 @media (max-width: 380px) { .division-screen .people { grid-template-columns: minmax(0,1fr); } }
 @media (min-width: 900px) { .division-screen .people { gap: 16px; } .division-screen .people .card { padding: 18px; } .division-screen .person .num { font-size: 26px; } }
 @media (min-width: 900px) { .division-screen .people { margin-bottom: 0; } }
+
+/* Cartões que abrem e fecham com uma seta */
+.division-screen .collapsible > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.division-screen .collapsible > summary::-webkit-details-marker { display: none; }
+.division-screen .collapsible > summary h2 { margin: 0; }
+.division-screen .collapsible > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--ink2); border-bottom: 2px solid var(--ink2); transform: rotate(45deg); transition: transform .15s; margin-right: 4px; }
+.division-screen .collapsible[open] > summary::after { transform: rotate(-135deg); }
+.division-screen .collapsible[open] > summary { margin-bottom: 8px; }

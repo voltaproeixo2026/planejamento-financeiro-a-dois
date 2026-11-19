@@ -42,12 +42,12 @@ export function Split({ month }: { month: string }) {
           <dl className="kv"><dt>Renda no mês</dt><dd>{BRL(person.income)}</dd><dt>Dinheiro livre no mês</dt><dd>{BRL(person.freeMoney)}</dd></dl>
         </details>
       </section>)}</div>
-      <section className="card wide">
-        <h2>Quanto transferir em cada recebimento</h2>
+      <details className="card wide collapsible" id="transfer-plan" open>
+        <summary><h2>Quanto transferir em cada recebimento</h2></summary>
         <ul className="plan" id="plan">{view.events.length ? view.events.map((event, index) => <li key={`${event.who}-${event.date}-${index}`}>
           <span className="d">Dia {event.day}</span><span>{s.names[event.who]}<span className="small receipt-label">{event.label}</span></span><span className="v">{BRL(event.amount)}</span>
-        </li>) : <li className="small">Cadastre as rendas na aba Contas.</li>}</ul>
-      </section>
+        </li>) : <li className="small">Cadastre as rendas na aba Renda.</li>}</ul>
+      </details>
       <section className="card wide">
         <h2>Dinheiro livre por semana</h2>
         <div className="grid2">{view.people.map(person => <label className="fld" key={person.person}>
