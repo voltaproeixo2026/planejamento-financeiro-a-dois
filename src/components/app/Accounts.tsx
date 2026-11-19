@@ -342,7 +342,7 @@ export function Debts() {
     setF({ ...f, name: "", total: "", installments: "", amount: "" }); toast.success("Dívida adicionada.");
   };
   return (
-    <Section id="debts" title="Dívidas e parcelamentos" desc="Marque cada parcela como paga — nada é pago automaticamente na virada do mês.">
+    <Section id="debts" title="Parcelamentos" desc="Marque cada parcela como paga — nada é pago automaticamente na virada do mês.">
       <form onSubmit={add} className="mb-5 grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <F label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></F>
         <F label="Total contratado"><Input type="number" min="0" step="0.01" value={f.total} onChange={(e) => setF({ ...f, total: e.target.value })} placeholder="opcional" /></F>

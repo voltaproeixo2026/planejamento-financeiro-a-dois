@@ -93,10 +93,10 @@ function NewDebtCard({ month, onClose }: { month: string; onClose: () => void })
     const r = applyDraft(base, draft);
     if (typeof r === 'string') { toast.error(r); return; }
     update(st => ({ ...st, debts: [...st.debts, r] }));
-    toast.success('Dívida adicionada.'); onClose();
+    toast.success('Parcelamento adicionado.'); onClose();
   };
-  return <article className="debt-editor-card" aria-label="Nova dívida">
-    <h2 className="mb-4 text-lg">Nova dívida</h2>
+  return <article className="debt-editor-card" aria-label="Novo parcelamento">
+    <h2 className="mb-4 text-lg">Novo parcelamento</h2>
     <DebtForm id="new" draft={draft} setDraft={setDraft} names={s.names} />
     <p className="mt-3 text-xs text-muted-foreground">Para uma dívida que começa no mês que vem, use parcela número 1 e escolha esse mês em "e cai em".</p>
     <div className="mt-4 flex flex-wrap gap-2"><Button onClick={save}>Salvar</Button><Button variant="ghost" onClick={onClose}>Cancelar</Button></div>
@@ -107,12 +107,12 @@ export function DebtEditor({ month }: { month: string }) {
   const { s } = useAppState();
   const [adding, setAdding] = useState(false);
   return <details id="debts-fold" className="fold" open aria-label="Cadastro de dívidas">
-    <summary className="text-xl">Minhas dívidas ({s.debts.length})</summary>
+    <summary className="text-xl">Parcelas em andamento ({s.debts.length})</summary>
     <div id="debts" className="debt-editor-list">
       {s.debts.map(d => <DebtCard key={d.id} d={d} month={month} />)}
-      {!s.debts.length && !adding && <Empty>Nenhuma dívida cadastrada.</Empty>}
+      {!s.debts.length && !adding && <Empty>Nenhum parcelamento cadastrado.</Empty>}
       {adding && <NewDebtCard month={month} onClose={() => setAdding(false)} />}
     </div>
-    {!adding && <Button className="mt-4" variant="outline" onClick={() => setAdding(true)}><Plus className="h-4 w-4" />Adicionar dívida</Button>}
+    {!adding && <Button className="mt-4" variant="outline" onClick={() => setAdding(true)}><Plus className="h-4 w-4" />Adicionar parcelamento</Button>}
   </details>;
 }

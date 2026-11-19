@@ -29,7 +29,7 @@ export function Report({ month }: { month: string }) {
   const t = r.totals;
   return <Section id="report" title="Relatório do mês" desc={`Tudo o que entrou e as dívidas e contas de ${monthLabel(month)}, para guardar ou imprimir.`}>
     <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      {[['Entrou no mês', t.entrou], ['Dívidas pagas', t.dividasPagas], ['Contas pagas', t.contasPagas], ['Falta pagar', t.aPagar]].map(([label, value]) => <div key={label as string}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{BRL(value as number)}</dd></div>)}
+      {[['Entrou no mês', t.entrou], ['Parcelas pagas', t.dividasPagas], ['Contas pagas', t.contasPagas], ['Falta pagar', t.aPagar]].map(([label, value]) => <div key={label as string}><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{BRL(value as number)}</dd></div>)}
     </dl>
     <div className="mt-4 flex flex-wrap gap-2">
       <Button variant="outline" onClick={() => download(`relatorio-${month}.csv`, reportCsv(r), 'text/csv;charset=utf-8')}><Download className="h-4 w-4" />Baixar planilha (Excel)</Button>

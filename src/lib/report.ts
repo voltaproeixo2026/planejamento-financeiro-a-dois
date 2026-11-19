@@ -40,8 +40,8 @@ export function reportCsv(r: MonthReport): string {
   for (const l of r.entradas) rows.push(['Entrou', fmtDate(l.date), l.desc, l.who, num(l.amount), '']);
   for (const l of r.dividas) rows.push(['Dívida', fmtDate(l.date), l.desc, l.who, num(l.amount), l.status ?? '']);
   for (const l of r.contas) rows.push(['Conta fixa', fmtDate(l.date), l.desc, l.who, num(l.amount), l.status ?? '']);
-  rows.push([], ['Resumo'], ['Entrou no mês', '', '', '', num(r.totals.entrou), ''], ['Dívidas pagas', '', '', '', num(r.totals.dividasPagas), ''], ['Contas pagas', '', '', '', num(r.totals.contasPagas), ''], ['Falta pagar', '', '', '', num(r.totals.aPagar), ''], ['Dinheiro livre', '', '', '', num(r.totals.livre), ''], ['Sobra', '', '', '', num(r.totals.sobra), '']);
-  rows.push([], ['Situação das dívidas'], ['Dívida', '', '', 'Responsável', 'Falta pagar (R$)', 'Parcela']);
+  rows.push([], ['Resumo'], ['Entrou no mês', '', '', '', num(r.totals.entrou), ''], ['Parcelas pagas', '', '', '', num(r.totals.dividasPagas), ''], ['Contas pagas', '', '', '', num(r.totals.contasPagas), ''], ['Falta pagar', '', '', '', num(r.totals.aPagar), ''], ['Dinheiro livre', '', '', '', num(r.totals.livre), ''], ['Sobra', '', '', '', num(r.totals.sobra), '']);
+  rows.push([], ['Situação das parcelas'], ['Dívida', '', '', 'Responsável', 'Falta pagar (R$)', 'Parcela']);
   for (const d of r.debtsNow) rows.push([d.name, '', '', d.owner, num(d.remaining), d.situation]);
   return `﻿${rows.map((row) => row.map(csvCell).join(';')).join('\r\n')}`;
 }
@@ -59,10 +59,10 @@ table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;border-bottom:1p
 .totals{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.totals div{border:1px solid #dfe6e4;border-radius:8px;padding:10px}.totals b{display:block;font-size:17px;margin-top:4px}
 @media print{body{margin:12mm}}</style></head><body>
 <h1>${esc(r.title)}</h1><p class="sub">${esc(names[0])} e ${esc(names[1])} · gerado em ${esc(fmtDate(new Date().toISOString().slice(0, 10)))}</p>
-<div class="totals"><div>Entrou no mês<b>${BRL(t.entrou)}</b></div><div>Dívidas pagas<b>${BRL(t.dividasPagas)}</b></div><div>Contas pagas<b>${BRL(t.contasPagas)}</b></div><div>Falta pagar<b>${BRL(t.aPagar)}</b></div><div>Dinheiro livre<b>${BRL(t.livre)}</b></div><div>Sobra<b>${BRL(t.sobra)}</b></div></div>
+<div class="totals"><div>Entrou no mês<b>${BRL(t.entrou)}</b></div><div>Parcelas pagas<b>${BRL(t.dividasPagas)}</b></div><div>Contas pagas<b>${BRL(t.contasPagas)}</b></div><div>Falta pagar<b>${BRL(t.aPagar)}</b></div><div>Dinheiro livre<b>${BRL(t.livre)}</b></div><div>Sobra<b>${BRL(t.sobra)}</b></div></div>
 <h2>Dinheiro que entrou</h2>${table(['Data', 'Descrição', 'Pessoa', '', 'Valor'], r.entradas.map((l) => [fmtDate(l.date), l.desc, l.who, '', BRL(l.amount)]))}
-<h2>Dívidas do mês</h2>${table(['Data', 'Dívida', 'Pessoa', 'Situação', 'Valor'], lines(r.dividas))}
+<h2>Parcelas do mês</h2>${table(['Data', 'Parcela', 'Pessoa', 'Situação', 'Valor'], lines(r.dividas))}
 <h2>Contas fixas</h2>${table(['Data', 'Conta', 'Pessoa', 'Situação', 'Valor'], lines(r.contas))}
-<h2>Situação das dívidas</h2>${table(['Dívida', 'Responsável', 'Parcela', 'Falta pagar'], r.debtsNow.map((d) => [d.name, d.owner, d.situation, BRL(d.remaining)]))}
+<h2>Situação das parcelas</h2>${table(['Dívida', 'Responsável', 'Parcela', 'Falta pagar'], r.debtsNow.map((d) => [d.name, d.owner, d.situation, BRL(d.remaining)]))}
 </body></html>`;
 }

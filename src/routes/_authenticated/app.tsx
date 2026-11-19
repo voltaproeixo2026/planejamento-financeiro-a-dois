@@ -35,7 +35,7 @@ const tabs = [
   { id: "inicio", label: "Resumo", icon: ChartPie },
   { id: "renda", label: "Renda", icon: Wallet },
   { id: "contas", label: "Contas", icon: List },
-  { id: "dividas", label: "Dívidas", icon: CreditCard },
+  { id: "dividas", label: "Parcelas", icon: CreditCard },
   { id: "divisao", label: "Divisão", icon: Percent },
   { id: "fluxo", label: "Mês", icon: CalendarDays },
   { id: "plano", label: "Metas", icon: Target },

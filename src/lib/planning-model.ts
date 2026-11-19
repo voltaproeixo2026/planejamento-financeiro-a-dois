@@ -48,7 +48,7 @@ export function allocationView(s: AppState, month: string) {
   const listed = cats.filter(c => byCategory.has(c));
   const legacy = [...byCategory.keys()].filter(c => !cats.includes(c)).sort((x, y) => x.localeCompare(y));
   const groups = [
-    { name: 'Dívidas', value: sum.debtInstallments, category: 'divida', color: 'var(--c-divida)' },
+    { name: 'Parcelas', value: sum.debtInstallments, category: 'divida', color: 'var(--c-divida)' },
     ...[...listed, ...legacy].map(name => ({ name, value: byCategory.get(name) ?? 0, category: name.toLowerCase(), color: categoryColor(name, cats) })),
     { name: 'Dinheiro livre', value: sum.freeMoney[0] + sum.freeMoney[1], category: 'livre', color: 'var(--c-livre)' },
     { name: 'Poupança', value: Math.max(0, sum.leftover), category: 'poup', color: 'var(--c-poup)' },

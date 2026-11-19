@@ -13,7 +13,7 @@ describe('Debt editing', () => {
   it('adds a debt only when saved, in the existing household JSON', () => {
     household.state = emptyState(['Bianca', 'Julio']);
     render(<DebtEditor month="2026-10" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar dívida' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar parcelamento' }));
     expect(household.state.debts).toHaveLength(0);
     fill('Nome', 'Cartão'); fill('Valor da parcela (R$)', '100');
     fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
@@ -22,7 +22,7 @@ describe('Debt editing', () => {
   it('cancelling a new debt discards it', () => {
     household.state = emptyState(['Bianca', 'Julio']);
     render(<DebtEditor month="2026-10" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar dívida' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar parcelamento' }));
     fill('Nome', 'Cartão');
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(household.state.debts).toHaveLength(0);
