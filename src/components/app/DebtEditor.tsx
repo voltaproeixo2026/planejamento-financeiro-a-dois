@@ -106,12 +106,13 @@ function NewDebtCard({ month, onClose }: { month: string; onClose: () => void })
 export function DebtEditor({ month }: { month: string }) {
   const { s } = useAppState();
   const [adding, setAdding] = useState(false);
-  return <section aria-label="Cadastro de dívidas">
+  return <details id="debts-fold" className="fold" open aria-label="Cadastro de dívidas">
+    <summary className="text-xl">Minhas dívidas ({s.debts.length})</summary>
     <div id="debts" className="debt-editor-list">
       {s.debts.map(d => <DebtCard key={d.id} d={d} month={month} />)}
       {!s.debts.length && !adding && <Empty>Nenhuma dívida cadastrada.</Empty>}
       {adding && <NewDebtCard month={month} onClose={() => setAdding(false)} />}
     </div>
     {!adding && <Button className="mt-4" variant="outline" onClick={() => setAdding(true)}><Plus className="h-4 w-4" />Adicionar dívida</Button>}
-  </section>;
+  </details>;
 }
