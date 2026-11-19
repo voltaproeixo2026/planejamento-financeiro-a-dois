@@ -34,7 +34,7 @@ export function DebtScreen({ month }: { month: string }) {
   return <div className="debt-screen space-y-6">
     <section aria-label="Resumo das parcelas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div></dl></section>
     <section id="debt-owners" aria-label="Parcelas do mês por pessoa">
-      <h2 className="mb-4 text-xl">Cada um paga em {monthLabel(month)}</h2>
+      <h2 className="mb-4 text-xl">Cada um</h2>
       <div className="grid gap-3 sm:grid-cols-3">{shares.people.map(p => <div key={p.key} className="rounded-xl border bg-card p-4">
         <p className="text-sm text-muted-foreground">{p.name}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner={p.key}>{BRL(p.total)}</p>
