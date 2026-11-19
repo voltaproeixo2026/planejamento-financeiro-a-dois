@@ -269,3 +269,9 @@
 .division-screen .collapsible > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--ink2); border-bottom: 2px solid var(--ink2); transform: rotate(45deg); transition: transform .15s; margin-right: 4px; }
 .division-screen .collapsible[open] > summary::after { transform: rotate(-135deg); }
 .division-screen .collapsible[open] > summary { margin-bottom: 8px; }
+
+/* Bloco recolhível com seta (Dívidas) */
+.fold > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; font-weight: 500; margin: 4px 0 10px; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; opacity: .6; transform: rotate(45deg); transition: transform .15s; margin-right: 4px; }
+.fold[open] > summary::after { transform: rotate(-135deg); }

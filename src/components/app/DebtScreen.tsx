@@ -67,6 +67,7 @@ export function DebtScreen({ month }: { month: string }) {
       <h2 className="mb-4 text-xl">Próximos meses</h2>
       <div id="fc-range" role="group" aria-label="Quantidade de meses" className="mb-4 flex gap-2">{[3, 6, 12].map(n => <Button key={n} variant={n === range ? 'default' : 'outline'} aria-pressed={n === range} onClick={() => setRange(n)}>{n} meses</Button>)}</div>
       <ul id="fc-lines" className="debt-change-lines">{changes.length ? changes.map(c => <li key={c.id}><span className={c.label === 'Termina' ? 'debt-pill debt-pill-good' : 'debt-pill debt-pill-warn'}>{c.label}</span><span>{c.label === 'Termina' ? <>{c.name} termina em {monthLabel(c.previousMonth)}. A partir de {monthLabel(c.month)} libera {BRL(c.amount)} por mês.</> : <>{c.name} começa em {monthLabel(c.month)}: {BRL(c.amount)} por mês.</>}</span></li>) : <li>Nenhuma parcela começa ou termina neste período.</li>}</ul>
+      <details id="fc-details" className="fold" open><summary>Previsão por dívida</summary>
       <div className="debt-forecast-scroll" tabIndex={0} role="region" aria-label="Previsão mensal das dívidas"><table id="fc" className="debt-forecast-table"><caption className="sr-only">Previsão de {range} meses</caption><thead><tr><th scope="col">Dívida</th>{rows.map(p => <th key={p.month} scope="col" data-current={p.month === month}>{monthLabel(p.month)}{p.month === month && <small>este mês</small>}</th>)}</tr></thead><tbody>{s.debts.map(d => <tr key={d.id}><th scope="row">{d.name || 'Dívida'}{d.origin && <small>{d.origin}</small>}</th>{rows.map(p => {
         const cell = p.debts.find(x => x.id === d.id);
         return <td key={p.month} data-current={p.month === month}>{cell?.installment ? <>{BRL(cell.installment.amount)}<small className={cell.current === cell.total ? 'text-success' : ''}>{cell.current === cell.total ? 'última parcela' : `${cell.current}/${cell.total}`}</small></> : <small>{cell && cell.current < 1 ? '—' : 'parcelas encerradas'}</small>}</td>;
@@ -77,6 +78,7 @@ export function DebtScreen({ month }: { month: string }) {
         <tr><th scope="row">Sobra prevista</th>{rows.map(p => <td key={p.month} data-current={p.month === month} className={p.leftover < 0 ? 'text-destructive' : ''}>{BRL(p.leftover)}</td>)}</tr>
       </tfoot></table></div>
       <p className="mt-3 text-sm text-muted-foreground">Contas fixas e dinheiro livre seguem iguais. Extras entram só nos meses em que foram lançados.</p>
+      </details>
     </section>
     <DebtEditor month={month} />
   </div>;
