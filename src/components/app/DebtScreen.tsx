@@ -34,18 +34,17 @@ export function DebtScreen({ month }: { month: string }) {
   return <div className="debt-screen space-y-6">
     <section aria-label="Resumo das parcelas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div></dl></section>
     <section id="debt-owners" aria-label="Parcelas do mês por pessoa">
-      <h2 className="mb-4 text-xl">Quanto cada um paga em parcelas em {monthLabel(month)}</h2>
+      <h2 className="mb-4 text-xl">Cada um paga em {monthLabel(month)}</h2>
       <div className="grid gap-3 sm:grid-cols-3">{shares.people.map(p => <div key={p.key} className="rounded-xl border bg-card p-4">
         <p className="text-sm text-muted-foreground">{p.name}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner={p.key}>{BRL(p.total)}</p>
         <p className="text-xs text-muted-foreground">Individual: {BRL(p.individual)} · Metade do conjunto: {BRL(p.joint)}</p>
       </div>)}
       <div className="rounded-xl border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Em conjunto (total)</p>
+        <p className="text-sm text-muted-foreground">Conjunto (total)</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums" data-owner="both">{BRL(shares.jointTotal)}</p>
-        <p className="text-xs text-muted-foreground">já dividido entre os dois ao lado</p>
       </div></div>
-      <p className="mt-2 text-sm text-muted-foreground">Total do mês: <b>{BRL(shares.total)}</b>. Só as parcelas de {monthLabel(month)}. O valor de cada um soma o que é só dele e a parte dele nas parcelas em conjunto.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Total do mês: <b>{BRL(shares.total)}</b>.</p>
     </section>
     <details id="debt-month-list" aria-label="Parcelas do mês" open className="rounded-xl border bg-card p-4">
       <summary className="cursor-pointer text-xl">Parcelas de {monthLabel(month)}</summary>
