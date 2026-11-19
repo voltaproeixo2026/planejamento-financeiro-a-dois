@@ -20,6 +20,17 @@ export function DebtScreen({ month }: { month: string }) {
   const filtered = filterDebts(s, month, { origin: fOrigin, owner: fOwner });
   const rows = forecast(s, month, range);
   const changes = debtChanges(s, month, range);
+  const monthRows = groupRows(s, installments);
+  const pendingRows = monthRows.filter(r => !r.items.every(i => i.paid));
+  const paidRows = monthRows.filter(r => r.items.every(i => i.paid));
+  const renderRow = (r: ReturnType<typeof groupRows>[number]) => {
+        const allPaid = r.items.every(i => i.paid);
+        const undoable = r.items.filter(i => i.paid && canToggle(s, i));
+        const single = r.items.length === 1 && !r.key.startsWith('origin-') ? r.items[0]! : null;
+        const sp = single ? (() => { const d = s.debts.find(x => x.id === single.refId); return d && debtSplit(s, d); })() : null;
+        const blocked = allPaid && !undoable.length;
+    return <li key={r.key} className={`flex flex-wrap items-center justify-between gap-3 ${allPaid ? "py-2 text-sm opacity-75" : "py-3"}`}><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{fmtDate(r.date)} · {single ? payerLabel(s.names, single, 'Em conjunto') : r.who === 'Compartilhada' ? 'Em conjunto' : r.who}</p>{sp ? <p className="text-xs text-muted-foreground">{s.names[0]} {BRL(sp.installment[0])} · {s.names[1]} {BRL(sp.installment[1])}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><b className="tabular-nums">{BRL(r.amount)}</b><Status paid={allPaid} overdue={r.date < today} /><Button size="sm" variant="outline" disabled={blocked} title={blocked ? 'Desfaça primeiro a parcela paga mais recente' : undefined} onClick={() => (allPaid ? undoable : r.items.filter(i => !i.paid)).forEach(i => togglePaid(update, i, month, s))}>{allPaid ? 'Desfazer' : 'Pagar'}</Button></div></li>;
+  };
   return <div className="debt-screen space-y-6">
     <section aria-label="Resumo das dívidas"><dl className="debt-top-numbers"><div><dt>Parcelas deste mês</dt><dd id="debt-month">{BRL(totals.monthly)}</dd></div></dl></section>
     <section id="debt-owners" aria-label="Parcelas do mês por pessoa">
@@ -36,26 +47,22 @@ export function DebtScreen({ month }: { month: string }) {
       </div></div>
       <p className="mt-2 text-sm text-muted-foreground">Total do mês: <b>{BRL(shares.total)}</b>. Só as parcelas de {monthLabel(month)}. O valor de cada um soma o que é só dele e a parte dele nas dívidas em conjunto.</p>
     </section>
-    <section id="debt-filter" aria-label="Filtrar dívidas">
-      <h2 className="mb-2 text-xl">Filtrar dívidas</h2>
-      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+    <details id="debt-month-list" aria-label="Parcelas do mês" open className="rounded-xl border bg-card p-4">
+      <summary className="cursor-pointer text-xl">Parcelas de {monthLabel(month)}</summary>
+      {monthRows.length ? <>
+        {pendingRows.length ? <ul className="mt-2 divide-y">{pendingRows.map(renderRow)}</ul> : <p className="mt-2 text-sm text-muted-foreground">Tudo pago em {monthLabel(month)}.</p>}
+        {paidRows.length > 0 && <details id="debt-paid-list" className="mt-3 border-t pt-3"><summary className="cursor-pointer text-sm text-muted-foreground">Já pagas ({paidRows.length})</summary><ul className="mt-1 divide-y">{paidRows.map(renderRow)}</ul></details>}
+      </> : <p className="mt-2 text-sm text-muted-foreground">Nenhuma parcela neste mês.</p>}
+    </details>
+    <details id="debt-filter" aria-label="Filtrar dívidas" className="rounded-xl border bg-card p-4">
+      <summary className="cursor-pointer text-xl">Filtrar dívidas</summary>
+      <div className="mb-3 mt-3 grid gap-3 sm:grid-cols-2">
         <label className="text-sm">Onde é a dívida<select aria-label="Onde é a dívida" className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={fOrigin} onChange={e => setFOrigin(e.target.value)}><option value="all">Todas</option>{origins.map(o => <option key={o} value={o}>{o}</option>)}</select></label>
         <label className="text-sm">Responsável<select aria-label="Responsável" className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={fOwner} onChange={e => setFOwner(e.target.value as 'all' | 'a' | 'b' | 'both')}><option value="all">Todos</option><option value="a">{s.names[0]}</option><option value="b">{s.names[1]}</option><option value="both">Em conjunto</option></select></label>
       </div>
       {filtered.rows.length ? <ul className="divide-y">{filtered.rows.map(r => <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{r.label} · {r.owner}</p></div><div className="text-right"><b className="tabular-nums">{BRL(r.share)}</b>{r.share !== r.installment && <p className="text-xs text-muted-foreground">de {BRL(r.installment)}</p>}</div></li>)}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela com esse filtro em {monthLabel(month)}.</p>}
       <p id="debt-filter-total" className="mt-2 text-sm text-muted-foreground">Total em {monthLabel(month)}: <b>{BRL(filtered.total)}</b>{fOwner === 'a' || fOwner === 'b' ? ` (individuais + a parte de ${s.names[fOwner === 'a' ? 0 : 1]} nas dívidas em conjunto)` : ''}</p>
-    </section>
-    <section id="debt-month-list" aria-label="Parcelas do mês">
-      <h2 className="mb-2 text-xl">Parcelas de {monthLabel(month)}</h2>
-      {installments.length ? <ul className="divide-y">{groupRows(s, installments).map(r => {
-        const allPaid = r.items.every(i => i.paid);
-        const undoable = r.items.filter(i => i.paid && canToggle(s, i));
-        const single = r.items.length === 1 && !r.key.startsWith('origin-') ? r.items[0]! : null;
-        const sp = single ? (() => { const d = s.debts.find(x => x.id === single.refId); return d && debtSplit(s, d); })() : null;
-        const blocked = allPaid && !undoable.length;
-        return <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-medium">{r.name}</p><p className="text-xs text-muted-foreground">{fmtDate(r.date)} · {single ? payerLabel(s.names, single, 'Em conjunto') : r.who === 'Compartilhada' ? 'Em conjunto' : r.who}</p>{sp ? <p className="text-xs text-muted-foreground">{s.names[0]} {BRL(sp.installment[0])} · {s.names[1]} {BRL(sp.installment[1])}</p> : null}</div><div className="flex flex-wrap items-center gap-2"><b className="tabular-nums">{BRL(r.amount)}</b><Status paid={allPaid} overdue={r.date < today} /><Button size="sm" variant="outline" disabled={blocked} title={blocked ? 'Desfaça primeiro a parcela paga mais recente' : undefined} onClick={() => (allPaid ? undoable : r.items.filter(i => !i.paid)).forEach(i => togglePaid(update, i, month, s))}>{allPaid ? 'Desfazer' : 'Pagar'}</Button></div></li>;
-      })}</ul> : <p className="text-sm text-muted-foreground">Nenhuma parcela neste mês.</p>}
-    </section>
+    </details>
     <section>
       <h2 className="mb-4 text-xl">Próximos meses</h2>
       <div id="fc-range" role="group" aria-label="Quantidade de meses" className="mb-4 flex gap-2">{[3, 6, 12].map(n => <Button key={n} variant={n === range ? 'default' : 'outline'} aria-pressed={n === range} onClick={() => setRange(n)}>{n} meses</Button>)}</div>

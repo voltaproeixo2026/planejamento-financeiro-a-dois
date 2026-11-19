@@ -138,8 +138,11 @@ describe('Parcelas do mês agrupadas por "onde é a dívida"', () => {
     fireEvent.click(list().querySelectorAll('button')[0]!);
     expect(household.state.debts.filter(d => d.paidCount === 1).map(d => d.id).sort()).toEqual(['sofa', 'tv']);
     view.rerender(<DebtScreen month="2026-10" />);
-    expect(list().querySelectorAll('li')[0]!.textContent).toContain('Desfazer');
-    fireEvent.click(list().querySelectorAll('button')[0]!);
+    // a paga sai do topo e vai para "Já pagas" no final
+    expect(list().querySelector('#debt-paid-list')!.textContent).toContain('Cartão mãe');
+    expect(list().querySelector('#debt-paid-list')!.textContent).toContain('Desfazer');
+    expect(list().querySelector('ul')!.textContent).not.toContain('Cartão mãe');
+    fireEvent.click(list().querySelector('#debt-paid-list button')!);
     expect(household.state.debts.every(d => d.paidCount === 0)).toBe(true);
   });
 });
